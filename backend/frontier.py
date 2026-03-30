@@ -91,21 +91,16 @@ def load_returns(tickers: list[str], lookback: str = "3y") -> pd.DataFrame:
 
     prices = pd.DataFrame(frames)
 
-    # Find latest common start date (intersection of all series)
-    # Keep only ETFs that start within 30 weeks of the latest start
+    # Keep only ETFs that start within 30 weeks of the median start date
     start_dates = prices.apply(lambda col: col.first_valid_index())
-    latest_start = start_dates.max()
-    # Drop ETFs whose data starts more than 30 weeks later than the median start
     median_start = start_dates.sort_values().iloc[len(start_dates) // 2]
     cutoff_start = median_start + pd.Timedelta(weeks=30)
     keep = start_dates[start_dates <= cutoff_start].index
     prices = prices[keep]
 
-    # Forward-fill up to 3 weeks (handles holidays/trading halts), then restrict
-    # to the period where ALL kept ETFs have data
     prices = prices.ffill(limit=3)
-    prices = prices.dropna()          # rows where all have data
-    prices = prices.dropna(axis=1)    # any col still with NaN → drop
+    prices = prices.dropna()
+    prices = prices.dropna(axis=1)
 
     if prices.shape[1] < 3 or len(prices) < 40:
         return pd.DataFrame()
@@ -150,6 +145,49 @@ def _port_stats(w: np.ndarray, mu: np.ndarray, cov: np.ndarray, weeks: int) -> t
     return ann_sig, ann_mu, sharpe
 
 
+def _max_drawdown_vec(rets_np: np.ndarray, W: np.ndarray) -> np.ndarray:
+    """
+    Vectorised max-drawdown over K portfolios.
+    rets_np : (T, n) weekly returns
+    W       : (K, n) portfolio weights
+    returns : (K,)  max drawdown values (≤ 0)
+    """
+    port_rets = rets_np @ W.T                               # (T, K)
+    equity    = np.cumprod(1.0 + port_rets, axis=0)        # (T, K)
+    peak      = np.maximum.accumulate(equity, axis=0)
+    dd        = (equity - peak) / np.maximum(peak, 1e-10)
+    return dd.min(axis=0)                                   # (K,)
+
+
+def _pareto_front_2d(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """
+    Maximize both x and y.  O(n log n) sort + sweep.
+    Returns boolean mask of non-dominated points.
+    """
+    n = len(x)
+    if n == 0:
+        return np.zeros(0, dtype=bool)
+    order  = np.argsort(-x)     # descending x
+    mask   = np.zeros(n, dtype=bool)
+    best_y = -np.inf
+    for idx in order:
+        if y[idx] > best_y:
+            mask[idx] = True
+            best_y = y[idx]
+    return mask
+
+
+def _portfolio_dd_calmar(w: np.ndarray, rets_np: np.ndarray, ann_mu: float) -> tuple[float, float]:
+    """MaxDD and Calmar for a single weight vector."""
+    port_rets = rets_np @ w
+    equity    = np.cumprod(1.0 + port_rets)
+    peak      = np.maximum.accumulate(equity)
+    dd        = (equity - peak) / np.maximum(peak, 1e-10)
+    max_dd    = float(dd.min())
+    calmar    = ann_mu / abs(max_dd) if max_dd < -1e-6 else 0.0
+    return round(max_dd, 4), round(calmar, 3)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Monte Carlo
 # ─────────────────────────────────────────────────────────────────────────────
@@ -160,22 +198,59 @@ def run_monte_carlo(
     is_equity: np.ndarray,
     is_safe: np.ndarray,
     weeks: int,
+    rets_df: pd.DataFrame,
     n: int = 10_000,
 ) -> list[dict]:
-    rng = np.random.default_rng(42)
-    results = []
+    rng      = np.random.default_rng(42)
     n_assets = len(mu)
-    for _ in range(n):
-        raw = rng.dirichlet(np.ones(n_assets))
-        w = _fsc_clip(raw, is_equity, is_safe)
-        sig, ret, sharpe = _port_stats(w, mu, cov, weeks)
-        results.append({"sigma": round(sig, 4), "mu": round(ret, 4), "sharpe": round(sharpe, 3)})
+    rets_np  = rets_df.values.astype(np.float64)   # (T, n_assets)
 
-    # Downsample to 3,000 for transfer — keep full Sharpe range
-    if len(results) > 3000:
-        results.sort(key=lambda x: x["sharpe"])
-        step = len(results) // 3000
-        results = results[::step][:3000]
+    # ── Generate FSC-clipped weight matrix ──────────────────────────────────
+    W = np.zeros((n, n_assets))
+    for i in range(n):
+        raw   = rng.dirichlet(np.ones(n_assets))
+        W[i]  = _fsc_clip(raw, is_equity, is_safe)
+
+    # ── Vectorised portfolio stats ───────────────────────────────────────────
+    ann_mu_p  = W @ (mu * weeks)                    # (n,)
+    WC        = W @ (cov * weeks)                   # (n, n_assets)
+    ann_var_p = (WC * W).sum(axis=1)               # (n,)
+    ann_sig_p = np.sqrt(np.maximum(ann_var_p, 1e-10))
+    sharpe_p  = (ann_mu_p - RF_RATE) / ann_sig_p   # (n,)
+
+    # ── Vectorised max-drawdown + Calmar ─────────────────────────────────────
+    max_dd_p = _max_drawdown_vec(rets_np, W)        # (n,)
+    calmar_p = np.where(max_dd_p < -1e-6,
+                        ann_mu_p / np.abs(max_dd_p),
+                        0.0)                        # (n,)
+
+    # ── Pareto fronts ────────────────────────────────────────────────────────
+    # Sharpe vs MaxDD  : maximize Sharpe (y) and MaxDD (x, closer to 0 = better)
+    p_msdd     = _pareto_front_2d(max_dd_p, sharpe_p)
+    # Sharpe vs Calmar : maximize both
+    p_mscalmar = _pareto_front_2d(calmar_p, sharpe_p)
+
+    results = []
+    for i in range(n):
+        results.append({
+            "sigma":      round(float(ann_sig_p[i]), 4),
+            "mu":         round(float(ann_mu_p[i]), 4),
+            "sharpe":     round(float(sharpe_p[i]), 3),
+            "max_dd":     round(float(max_dd_p[i]), 4),
+            "calmar":     round(float(calmar_p[i]), 3),
+            "p_msdd":     bool(p_msdd[i]),
+            "p_mscalmar": bool(p_mscalmar[i]),
+        })
+
+    # ── Downsample to 3 000: always keep Pareto points ──────────────────────
+    pareto_idx = [i for i, r in enumerate(results) if r["p_msdd"] or r["p_mscalmar"]]
+    other_idx  = [i for i in range(n) if i not in set(pareto_idx)]
+    target_other = max(0, 3000 - len(pareto_idx))
+    if len(other_idx) > target_other:
+        rng2      = np.random.default_rng(99)
+        other_idx = rng2.choice(other_idx, size=target_other, replace=False).tolist()
+    keep    = set(pareto_idx + other_idx)
+    results = [r for i, r in enumerate(results) if i in keep]
     return results
 
 
@@ -195,14 +270,12 @@ def compute_frontier(
     ann_mu = mu * weeks
     ann_cov = cov * weeks
 
-    eq_constraint = {"type": "ineq", "fun": lambda w: MAX_EQUITY - w[is_equity].sum()}
+    eq_constraint   = {"type": "ineq", "fun": lambda w: MAX_EQUITY - w[is_equity].sum()}
     safe_constraint = {"type": "ineq", "fun": lambda w: w[is_safe].sum() - MIN_SAFE}
-    sum_constraint = {"type": "eq",  "fun": lambda w: w.sum() - 1.0}
+    sum_constraint  = {"type": "eq",   "fun": lambda w: w.sum() - 1.0}
     bounds = [(0.0, 1.0)] * n
 
-    # Find feasible mu range first
     w0 = np.ones(n) / n
-    # Min-return portfolio (MVP)
     res_min = minimize(
         lambda w: w @ ann_cov @ w,
         w0, method="SLSQP",
@@ -214,8 +287,6 @@ def compute_frontier(
         return []
 
     mu_min = float(res_min.x @ ann_mu)
-
-    # Max-return feasible
     res_max = minimize(
         lambda w: -w @ ann_mu,
         w0, method="SLSQP",
@@ -238,7 +309,7 @@ def compute_frontier(
         if result.success:
             sig = sqrt(max(float(result.fun), 1e-10))
             curve.append({"sigma": round(sig, 4), "mu": round(target, 4)})
-        w0 = result.x if result.success else np.ones(n) / n  # warm-start
+        w0 = result.x if result.success else np.ones(n) / n
 
     return curve
 
@@ -254,13 +325,16 @@ def special_portfolios(
     is_equity: np.ndarray,
     is_safe: np.ndarray,
     weeks: int,
+    rets_df: pd.DataFrame,
     gamma: float = 2.5,
 ) -> dict:
-    n = len(mu)
-    ann_mu = mu * weeks
+    n       = len(mu)
+    ann_mu  = mu * weeks
     ann_cov = cov * weeks
-    w0 = np.ones(n) / n
-    bounds = [(0.0, 1.0)] * n
+    w0      = np.ones(n) / n
+    bounds  = [(0.0, 1.0)] * n
+    rets_np = rets_df.values.astype(np.float64)
+
     base_cons = [
         {"type": "eq",  "fun": lambda w: w.sum() - 1.0},
         {"type": "ineq","fun": lambda w: MAX_EQUITY - w[is_equity].sum()},
@@ -270,11 +344,19 @@ def special_portfolios(
     def _weights_dict(w: np.ndarray, threshold: float = 0.005) -> dict:
         return {tickers[i]: round(float(w[i]), 4) for i in range(n) if w[i] > threshold}
 
+    def _enrich(w: np.ndarray, sig: float, ret: float, sr: float) -> dict:
+        max_dd, calmar = _portfolio_dd_calmar(w, rets_np, ret)
+        return {
+            "sigma": round(sig, 4), "mu": round(ret, 4),
+            "sharpe": round(sr, 3), "max_dd": max_dd, "calmar": calmar,
+            "weights": _weights_dict(w),
+        }
+
     # MVP
-    res_mvp = minimize(lambda w: w @ ann_cov @ w, w0, method="SLSQP",
-                       bounds=bounds, constraints=base_cons,
-                       options={"ftol": 1e-9, "maxiter": 500})
-    mvp_w = res_mvp.x if res_mvp.success else w0
+    res_mvp  = minimize(lambda w: w @ ann_cov @ w, w0, method="SLSQP",
+                        bounds=bounds, constraints=base_cons,
+                        options={"ftol": 1e-9, "maxiter": 500})
+    mvp_w    = res_mvp.x if res_mvp.success else w0
     mvp_sig, mvp_mu, mvp_sr = _port_stats(mvp_w, mu, cov, weeks)
 
     # Max Sharpe
@@ -284,11 +366,11 @@ def special_portfolios(
         bounds=bounds, constraints=base_cons,
         options={"ftol": 1e-9, "maxiter": 500},
     )
-    ms_w = res_ms.x if res_ms.success else w0
+    ms_w   = res_ms.x if res_ms.success else w0
     ms_sig, ms_mu, ms_sr = _port_stats(ms_w, mu, cov, weeks)
 
-    # γ* portfolio: target equity weight = min(1/γ, 0.70)
-    target_eq = min(1.0 / max(gamma, 0.1), MAX_EQUITY)
+    # γ* portfolio
+    target_eq  = min(1.0 / max(gamma, 0.1), MAX_EQUITY)
     gstar_cons = base_cons + [
         {"type": "eq", "fun": lambda w: w[is_equity].sum() - target_eq},
     ]
@@ -301,22 +383,14 @@ def special_portfolios(
     gs_w = res_gstar.x if res_gstar.success else w0
     gs_sig, gs_mu, gs_sr = _port_stats(gs_w, mu, cov, weeks)
 
+    gs_result = _enrich(gs_w, gs_sig, gs_mu, gs_sr)
+    gs_result["equity_pct"] = round(float(gs_w[is_equity].sum()) * 100, 1)
+    gs_result["safe_pct"]   = round(float(gs_w[is_safe].sum()) * 100, 1)
+
     return {
-        "mvp": {
-            "sigma": round(mvp_sig, 4), "mu": round(mvp_mu, 4),
-            "sharpe": round(mvp_sr, 3), "weights": _weights_dict(mvp_w),
-        },
-        "max_sharpe": {
-            "sigma": round(ms_sig, 4), "mu": round(ms_mu, 4),
-            "sharpe": round(ms_sr, 3), "weights": _weights_dict(ms_w),
-        },
-        "gamma_star": {
-            "sigma": round(gs_sig, 4), "mu": round(gs_mu, 4),
-            "sharpe": round(gs_sr, 3),
-            "equity_pct": round(float(gs_w[is_equity].sum()) * 100, 1),
-            "safe_pct":   round(float(gs_w[is_safe].sum()) * 100, 1),
-            "weights": _weights_dict(gs_w),
-        },
+        "mvp":        _enrich(mvp_w, mvp_sig, mvp_mu, mvp_sr),
+        "max_sharpe": _enrich(ms_w,  ms_sig,  ms_mu,  ms_sr),
+        "gamma_star": gs_result,
     }
 
 
@@ -328,17 +402,17 @@ def build_frontier_response(lookback: str = "3y", top_n: int = 100, gamma: float
     cache_key = f"{lookback}_{top_n}"
     now = time.time()
 
-    # γ* is cheap — compute on top of cached base if available
     base = _cache.get(cache_key)
     if base and (now - base["ts"]) < CACHE_TTL_SECONDS:
-        # Recompute only gamma_star with new gamma
+        # Recompute only gamma_star with new gamma (fast)
         tickers = base["tickers"]
         mu_arr  = base["mu_arr"]
         cov_arr = base["cov_arr"]
         is_eq   = base["is_equity"]
         is_safe = base["is_safe"]
         weeks   = base["weeks"]
-        specials = special_portfolios(mu_arr, cov_arr, tickers, is_eq, is_safe, weeks, gamma)
+        rets_df = base["rets_df"]
+        specials = special_portfolios(mu_arr, cov_arr, tickers, is_eq, is_safe, weeks, rets_df, gamma)
         resp = dict(base["response"])
         resp["special"] = specials
         resp["meta"]["gamma"] = gamma
@@ -350,44 +424,42 @@ def build_frontier_response(lookback: str = "3y", top_n: int = 100, gamma: float
     universe = _load_universe()
     ucs      = _load_ucs_scores()
 
-    # Score and rank universe
     universe["ucs_score"] = universe["ticker"].map(ucs).fillna(0.0)
-    # Use top_n by ucs_score among those with price data
     universe = universe[universe["ticker"].apply(
         lambda t: (PRICE_DIR / f"{t}.csv").exists()
     )].copy()
     universe = universe.nlargest(top_n, "ucs_score").reset_index(drop=True)
 
-    tickers = universe["ticker"].tolist()
+    tickers      = universe["ticker"].tolist()
     asset_classes = universe.set_index("ticker")["asset_class"].to_dict()
 
-    # Load returns
     ret_df = load_returns(tickers, lookback)
     if ret_df.empty or len(ret_df.columns) < 5:
         raise ValueError("Insufficient return data")
 
-    valid_tickers = ret_df.columns.tolist()
-    n = len(valid_tickers)
+    valid_tickers  = ret_df.columns.tolist()
+    n              = len(valid_tickers)
     weeks_per_year = 52
-    weeks_actual = len(ret_df)
+    weeks_actual   = len(ret_df)
 
-    mu_arr  = ret_df.mean().values          # weekly mean
+    mu_arr  = ret_df.mean().values
     lw = LedoitWolf()
     lw.fit(ret_df.values)
-    cov_arr = lw.covariance_                # weekly covariance
+    cov_arr = lw.covariance_
 
-    ac = [asset_classes.get(t, "domestic_equity") for t in valid_tickers]
+    ac       = [asset_classes.get(t, "domestic_equity") for t in valid_tickers]
     is_equity = np.array([c in EQUITY_CLASSES for c in ac])
     is_safe   = np.array([c in SAFE_CLASSES   for c in ac])
 
     log.info(f"  {n} ETFs, {weeks_actual} weekly obs — running Monte Carlo…")
-    mc = run_monte_carlo(mu_arr, cov_arr, is_equity, is_safe, weeks_per_year)
+    mc = run_monte_carlo(mu_arr, cov_arr, is_equity, is_safe, weeks_per_year, ret_df)
 
     log.info("  Monte Carlo done — computing analytical frontier…")
     curve = compute_frontier(mu_arr, cov_arr, is_equity, is_safe, weeks_per_year)
 
     log.info("  Frontier done — computing special portfolios…")
-    specials = special_portfolios(mu_arr, cov_arr, valid_tickers, is_equity, is_safe, weeks_per_year, gamma)
+    specials = special_portfolios(mu_arr, cov_arr, valid_tickers, is_equity, is_safe,
+                                   weeks_per_year, ret_df, gamma)
 
     # Individual ETF scatter
     ann_mu  = mu_arr * weeks_per_year
@@ -425,14 +497,14 @@ def build_frontier_response(lookback: str = "3y", top_n: int = 100, gamma: float
         "frontier_curve": curve,
         "special":        specials,
         "meta": {
-            "n_etfs":       n,
-            "lookback":     lookback,
+            "n_etfs":        n,
+            "lookback":      lookback,
             "lookback_days": {"1y": 365, "2y": 730, "3y": 1095}[lookback],
-            "weeks":        weeks_actual,
-            "computed_at":  datetime.now().isoformat(),
-            "compute_sec":  elapsed,
-            "rf_rate":      RF_RATE,
-            "gamma":        gamma,
+            "weeks":         weeks_actual,
+            "computed_at":   datetime.now().isoformat(),
+            "compute_sec":   elapsed,
+            "rf_rate":       RF_RATE,
+            "gamma":         gamma,
         },
     }
 
@@ -442,6 +514,7 @@ def build_frontier_response(lookback: str = "3y", top_n: int = 100, gamma: float
         "mu_arr": mu_arr, "cov_arr": cov_arr,
         "is_equity": is_equity, "is_safe": is_safe,
         "weeks": weeks_per_year,
+        "rets_df": ret_df,
     }
     return response
 
@@ -452,11 +525,15 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     t0 = time.time()
     resp = build_frontier_response("3y", 60, 2.5)
-    m = resp["meta"]
+    m  = resp["meta"]
     sp = resp["special"]
+    mc = resp["monte_carlo"]
     print(f"\n=== korea-roboAdvisor-etf-frontier ===")
     print(f"ETFs: {m['n_etfs']}  weeks: {m['weeks']}  computed in {m['compute_sec']}s")
-    print(f"Frontier points: {len(resp['frontier_curve'])}  MC points: {len(resp['monte_carlo'])}")
-    print(f"MVP:        σ={sp['mvp']['sigma']:.1%}  μ={sp['mvp']['mu']:.1%}  SR={sp['mvp']['sharpe']:.2f}")
-    print(f"Max-Sharpe: σ={sp['max_sharpe']['sigma']:.1%}  μ={sp['max_sharpe']['mu']:.1%}  SR={sp['max_sharpe']['sharpe']:.2f}")
-    print(f"γ*=2.5:     σ={sp['gamma_star']['sigma']:.1%}  μ={sp['gamma_star']['mu']:.1%}  equity={sp['gamma_star']['equity_pct']}%")
+    print(f"Frontier points: {len(resp['frontier_curve'])}  MC points: {len(mc)}")
+    print(f"MVP:        σ={sp['mvp']['sigma']:.1%}  μ={sp['mvp']['mu']:.1%}  SR={sp['mvp']['sharpe']:.2f}  MaxDD={sp['mvp']['max_dd']:.1%}  Cal={sp['mvp']['calmar']:.2f}")
+    print(f"Max-Sharpe: σ={sp['max_sharpe']['sigma']:.1%}  μ={sp['max_sharpe']['mu']:.1%}  SR={sp['max_sharpe']['sharpe']:.2f}  MaxDD={sp['max_sharpe']['max_dd']:.1%}  Cal={sp['max_sharpe']['calmar']:.2f}")
+    print(f"γ*=2.5:     σ={sp['gamma_star']['sigma']:.1%}  μ={sp['gamma_star']['mu']:.1%}  equity={sp['gamma_star']['equity_pct']}%  MaxDD={sp['gamma_star']['max_dd']:.1%}")
+    n_p1 = sum(1 for r in mc if r['p_msdd'])
+    n_p2 = sum(1 for r in mc if r['p_mscalmar'])
+    print(f"Pareto (Sharpe-MaxDD): {n_p1}  Pareto (Sharpe-Calmar): {n_p2}")

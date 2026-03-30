@@ -45,6 +45,26 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 
 .badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase}
 .badge-live{background:#10b981;color:#fff}
+
+/* ── secondary charts ── */
+.secondary-wrap{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid #1e293b}
+.secondary-card{padding:12px 16px 8px}
+.secondary-card+.secondary-card{border-left:1px solid #1e293b}
+.secondary-title{font-size:12px;font-weight:700;color:#94a3b8;margin-bottom:6px}
+.secondary-chart{width:100%;height:280px}
+
+/* ── constraint panel ── */
+.constraint-wrap{padding:14px 24px;border-top:1px solid #1e293b;background:#0c1424}
+.constraint-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.constraint-head-title{font-size:12px;font-weight:700;color:#cbd5e1}
+.constraint-inputs{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.constraint-field{display:flex;flex-direction:column;gap:3px}
+.constraint-field label{font-size:10px;color:#64748b}
+.constraint-field input{width:110px;padding:5px 8px;background:#1e293b;border:1px solid #334155;border-radius:6px;
+  color:#f1f5f9;font-size:12px;outline:none}
+.constraint-field input:focus{border-color:#3b82f6}
+.constraint-count{margin-top:8px;font-size:11px;color:#64748b}
+.constraint-count span{color:#10b981;font-weight:700}
 </style>
 </head>
 <body>
@@ -96,6 +116,41 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
     <div>효율적 투자선 계산 중…</div>
   </div>
   <div id="chart" style="display:none"></div>
+</div>
+
+<!-- secondary charts: Sharpe vs MaxDD | Sharpe vs Calmar -->
+<div class="secondary-wrap" id="secondary-wrap" style="display:none">
+  <div class="secondary-card">
+    <div class="secondary-title">샤프 vs 최대낙폭 (파레토 프론티어)</div>
+    <div class="secondary-chart" id="chart-msdd"></div>
+  </div>
+  <div class="secondary-card">
+    <div class="secondary-title">샤프 vs 칼마</div>
+    <div class="secondary-chart" id="chart-mscalmar"></div>
+  </div>
+</div>
+
+<!-- constraint panel -->
+<div class="constraint-wrap" id="constraint-wrap" style="display:none">
+  <div class="constraint-head">
+    <span class="constraint-head-title">제약 조건</span>
+    <span class="badge badge-live">실시간</span>
+  </div>
+  <div class="constraint-inputs">
+    <div class="constraint-field">
+      <label>최소 샤프</label>
+      <input type="number" id="c-sharpe" step="0.1" placeholder="예) 1.0">
+    </div>
+    <div class="constraint-field">
+      <label>최대 낙폭 (%)</label>
+      <input type="number" id="c-maxdd" step="1" min="0" placeholder="예) 20">
+    </div>
+    <div class="constraint-field">
+      <label>최소 칼마</label>
+      <input type="number" id="c-calmar" step="0.1" placeholder="예) 1.5">
+    </div>
+  </div>
+  <div class="constraint-count" id="constraint-count"></div>
 </div>
 
 <div class="stats-bar" id="stats-bar" style="display:none">
@@ -238,6 +293,7 @@ async function updateGammaStar() {
       text: [[`● 내 위험성향<br>주식 ${eq}% | 채권 ${sp.safe_pct}%<br>σ=${(sp.sigma*100).toFixed(1)}% μ=${(sp.mu*100).toFixed(1)}%<br>Sharpe ${sp.sharpe.toFixed(2)}`]],
     }, 4);
     updateStats();
+    applyConstraints();   // refresh secondary charts with updated γ* marker
   } catch(e) { /* silent */ }
 }
 
@@ -248,6 +304,8 @@ function renderChart() {
   const chartEl = document.getElementById('chart');
   chartEl.style.display = 'block';
   document.getElementById('stats-bar').style.display = 'flex';
+  document.getElementById('secondary-wrap').style.display = 'grid';
+  document.getElementById('constraint-wrap').style.display = 'block';
 
   const d = state.data;
 
@@ -368,13 +426,9 @@ function renderChart() {
       gridcolor: '#1e293b', zerolinecolor: '#1e293b',
       ticksuffix: '%', tickfont: {size: 10},
     },
-    legend: {
-      bgcolor: 'rgba(15,23,42,0.85)', bordercolor: '#1e293b', borderwidth: 1,
-      font: {size: 10}, x: 0.01, y: 0.99,
-    },
     margin: {l: 60, r: 60, t: 16, b: 50},
     hovermode: 'closest',
-    showlegend: true,
+    showlegend: false,
   };
 
   const config = {
@@ -385,6 +439,7 @@ function renderChart() {
   };
 
   Plotly.newPlot('chart', traces, layout, config);
+  renderSecondaryCharts(state.data.monte_carlo);
   updateStats();
 }
 
@@ -401,6 +456,136 @@ function updateStats() {
   document.getElementById('stat-meta').textContent =
     `ETF ${m.n_etfs}개 · ${m.weeks}주 데이터 · ${m.lookback} 룩백`;
 }
+
+// ── Secondary chart helpers ───────────────────────────────────────────────
+
+const SEC_LAYOUT_BASE = {
+  paper_bgcolor: '#0c1424',
+  plot_bgcolor:  '#0c1424',
+  font: {color: '#64748b', family: 'Pretendard, Noto Sans KR, sans-serif', size: 10},
+  margin: {l: 54, r: 12, t: 12, b: 44},
+  hovermode: 'closest',
+  showlegend: false,
+};
+
+const SEC_CFG = {displayModeBar: false, responsive: true};
+
+function _secAxisStyle(title) {
+  return {
+    title: {text: title, font: {size: 10, color: '#475569'}},
+    gridcolor: '#1e293b', zerolinecolor: '#334155',
+    tickfont: {size: 9, color: '#64748b'},
+  };
+}
+
+function _buildSecTraces(mcFiltered, xKey, special) {
+  const d = state.data;
+
+  // regular MC (non-Pareto)
+  const parKey = xKey === 'max_dd' ? 'p_msdd' : 'p_mscalmar';
+  const reg = mcFiltered.filter(p => !p[parKey]);
+  const par = mcFiltered.filter(p =>  p[parKey]);
+
+  const xScale = xKey === 'max_dd' ? 100 : 1;  // MaxDD → %, Calmar → raw
+
+  const trReg = {
+    x: reg.map(p => p[xKey] * xScale),
+    y: reg.map(p => p.sharpe),
+    mode: 'markers', type: 'scatter',
+    marker: {color: '#475569', size: 3, opacity: 0.35},
+    hovertemplate: xKey === 'max_dd'
+      ? `MaxDD=%{x:.1f}%<br>Sharpe=%{y:.2f}<extra></extra>`
+      : `Calmar=%{x:.2f}<br>Sharpe=%{y:.2f}<extra></extra>`,
+  };
+
+  const trPar = {
+    x: par.map(p => p[xKey] * xScale),
+    y: par.map(p => p.sharpe),
+    mode: 'markers', type: 'scatter',
+    marker: {color: '#f97316', size: 9, symbol: 'asterisk', opacity: 0.9,
+             line: {color: '#f97316', width: 1.5}},
+    hovertemplate: xKey === 'max_dd'
+      ? `파레토 MaxDD=%{x:.1f}%<br>Sharpe=%{y:.2f}<extra></extra>`
+      : `파레토 Calmar=%{x:.2f}<br>Sharpe=%{y:.2f}<extra></extra>`,
+  };
+
+  // Special portfolios
+  function spPt(key, label, color, symbol, size) {
+    const pt = special[key];
+    if (!pt) return null;
+    const xv = xKey === 'max_dd' ? pt.max_dd * 100 : pt.calmar;
+    return {
+      x: [xv], y: [pt.sharpe],
+      mode: 'markers+text', type: 'scatter',
+      marker: {color, size, symbol, line: {color: '#0c1424', width: 1}},
+      text: [`  ${label}`],
+      textposition: 'middle right',
+      textfont: {color, size: 9},
+      hovertemplate: `${label}<br>${xKey==='max_dd'?'MaxDD='+xv.toFixed(1)+'%':'Calmar='+xv.toFixed(2)}<br>Sharpe=${pt.sharpe.toFixed(2)}<extra></extra>`,
+    };
+  }
+  const ptMVP  = spPt('mvp',        '◆ MVP',        '#e2e8f0', 'diamond', 10);
+  const ptMS   = spPt('max_sharpe', '★ 최대샤프',   '#f59e0b', 'star',    12);
+  const ptGS   = spPt('gamma_star', '● 위험성향',   '#10b981', 'circle',  10);
+
+  return [trReg, trPar, ptMVP, ptMS, ptGS].filter(Boolean);
+}
+
+function renderSecondaryCharts(mcData) {
+  if (!state.data) return;
+  const sp = state.data.special;
+
+  // Chart 1: Sharpe vs MaxDD
+  const traces1 = _buildSecTraces(mcData, 'max_dd', sp);
+  const layout1 = {
+    ...SEC_LAYOUT_BASE,
+    xaxis: {..._secAxisStyle('최대낙폭 MaxDD (%)'), autorange: true},
+    yaxis: _secAxisStyle('샤프 Sharpe'),
+  };
+  Plotly.newPlot('chart-msdd', traces1, layout1, SEC_CFG);
+
+  // Chart 2: Sharpe vs Calmar
+  const traces2 = _buildSecTraces(mcData, 'calmar', sp);
+  const layout2 = {
+    ...SEC_LAYOUT_BASE,
+    xaxis: {..._secAxisStyle('칼마 Calmar'), autorange: true},
+    yaxis: _secAxisStyle('샤프 Sharpe'),
+  };
+  Plotly.newPlot('chart-mscalmar', traces2, layout2, SEC_CFG);
+}
+
+// ── Constraints ───────────────────────────────────────────────────────────
+
+let constraintDebounce = null;
+
+function applyConstraints() {
+  if (!state.data) return;
+  const minSharpe = parseFloat(document.getElementById('c-sharpe').value) || -Infinity;
+  const maxDDPct  = parseFloat(document.getElementById('c-maxdd').value);   // user enters 20 → MaxDD ≥ -20%
+  const minCalmar = parseFloat(document.getElementById('c-calmar').value) || -Infinity;
+  const maxDDThresh = isNaN(maxDDPct) ? -Infinity : -(maxDDPct / 100);    // -0.20
+
+  const filtered = state.data.monte_carlo.filter(p =>
+    p.sharpe  >= minSharpe &&
+    p.max_dd  >= maxDDThresh &&
+    p.calmar  >= minCalmar
+  );
+  const total = state.data.monte_carlo.length;
+  const el = document.getElementById('constraint-count');
+  if (filtered.length === total) {
+    el.innerHTML = `전체 <span>${total}</span>개 포트폴리오 표시 중`;
+  } else {
+    el.innerHTML = `제약 충족: <span>${filtered.length}</span> / ${total}개`;
+  }
+  renderSecondaryCharts(filtered);
+}
+
+['c-sharpe', 'c-maxdd', 'c-calmar'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    clearTimeout(constraintDebounce);
+    constraintDebounce = setTimeout(applyConstraints, 300);
+  });
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────
 loadData();
