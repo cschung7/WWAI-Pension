@@ -488,14 +488,22 @@ function _buildSecTraces(mcFiltered, xKey, special) {
 
   const xScale = xKey === 'max_dd' ? 100 : 1;  // MaxDD → %, Calmar → raw
 
+  // Full tooltip for MC portfolios
+  const mcTip = (p) => {
+    const xv = p[xKey] * xScale;
+    const base = `σ=${(p.sigma*100).toFixed(1)}%  μ=${(p.mu*100).toFixed(1)}%<br>Sharpe=${p.sharpe.toFixed(2)}`;
+    return xKey === 'max_dd'
+      ? `${base}<br>MaxDD=${xv.toFixed(1)}%  Calmar=${p.calmar.toFixed(2)}`
+      : `${base}<br>Calmar=${xv.toFixed(2)}  MaxDD=${(p.max_dd*100).toFixed(1)}%`;
+  };
+
   const trReg = {
     x: reg.map(p => p[xKey] * xScale),
     y: reg.map(p => p.sharpe),
     mode: 'markers', type: 'scatter',
     marker: {color: '#475569', size: 3, opacity: 0.35},
-    hovertemplate: xKey === 'max_dd'
-      ? `MaxDD=%{x:.1f}%<br>Sharpe=%{y:.2f}<extra></extra>`
-      : `Calmar=%{x:.2f}<br>Sharpe=%{y:.2f}<extra></extra>`,
+    text: reg.map(p => mcTip(p)),
+    hovertemplate: '%{text}<extra></extra>',
   };
 
   const trPar = {
@@ -504,24 +512,26 @@ function _buildSecTraces(mcFiltered, xKey, special) {
     mode: 'markers', type: 'scatter',
     marker: {color: '#f97316', size: 9, symbol: 'asterisk', opacity: 0.9,
              line: {color: '#f97316', width: 1.5}},
-    hovertemplate: xKey === 'max_dd'
-      ? `파레토 MaxDD=%{x:.1f}%<br>Sharpe=%{y:.2f}<extra></extra>`
-      : `파레토 Calmar=%{x:.2f}<br>Sharpe=%{y:.2f}<extra></extra>`,
+    text: par.map(p => `✱ 파레토<br>${mcTip(p)}`),
+    hovertemplate: '%{text}<extra></extra>',
   };
 
-  // Special portfolios
+  // Special portfolios — no inline text labels (they overlap); use hover only
   function spPt(key, label, color, symbol, size) {
     const pt = special[key];
     if (!pt) return null;
     const xv = xKey === 'max_dd' ? pt.max_dd * 100 : pt.calmar;
+    const tip = `${label}<br>σ=${(pt.sigma*100).toFixed(1)}%  μ=${(pt.mu*100).toFixed(1)}%`
+      + `<br>Sharpe=${pt.sharpe.toFixed(2)}`
+      + (xKey === 'max_dd'
+          ? `<br>MaxDD=${xv.toFixed(1)}%  Calmar=${pt.calmar.toFixed(2)}`
+          : `<br>Calmar=${xv.toFixed(2)}  MaxDD=${(pt.max_dd*100).toFixed(1)}%`);
     return {
       x: [xv], y: [pt.sharpe],
-      mode: 'markers+text', type: 'scatter',
-      marker: {color, size, symbol, line: {color: '#0c1424', width: 1}},
-      text: [`  ${label}`],
-      textposition: 'middle right',
-      textfont: {color, size: 9},
-      hovertemplate: `${label}<br>${xKey==='max_dd'?'MaxDD='+xv.toFixed(1)+'%':'Calmar='+xv.toFixed(2)}<br>Sharpe=${pt.sharpe.toFixed(2)}<extra></extra>`,
+      mode: 'markers', type: 'scatter',
+      marker: {color, size, symbol, line: {color: '#0c1424', width: 1.5}},
+      text: [tip],
+      hovertemplate: '%{text}<extra></extra>',
     };
   }
   const ptMVP  = spPt('mvp',        '◆ MVP',        '#e2e8f0', 'diamond', 10);
