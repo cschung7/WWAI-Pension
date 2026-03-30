@@ -563,6 +563,31 @@ async def build_portfolio(req: PensionPortfolioRequest) -> dict:
     }
 
 
+# ─── Efficient Frontier ───────────────────────────────────────────────────────
+
+from backend.frontier import build_frontier_response   # noqa: E402
+
+@app.get("/frontier", response_class=HTMLResponse)
+async def frontier_page() -> HTMLResponse:
+    html_path = STATIC_DIR / "frontier.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>korea-roboAdvisor-etf-frontier</h1><p>Building…</p>")
+
+
+@app.get("/frontier/data")
+async def frontier_data(
+    lookback: str = "3y",
+    gamma:    float = 2.5,
+    top_n:    int   = 100,
+) -> dict:
+    if lookback not in ("1y", "2y", "3y"):
+        lookback = "3y"
+    gamma  = max(0.5, min(float(gamma), 15.0))
+    top_n  = max(10, min(int(top_n), 821))
+    return build_frontier_response(lookback, top_n, gamma)
+
+
 # ─── Frontend ─────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)

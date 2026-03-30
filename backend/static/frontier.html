@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>korea-roboAdvisor-etf-frontier</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f172a;color:#f1f5f9;font-family:'Pretendard','Noto Sans KR',sans-serif;min-height:100vh}
+
+.header{padding:16px 24px;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.header-title{font-size:14px;font-weight:700;color:#f1f5f9;letter-spacing:-0.3px}
+.header-sub{font-size:11px;color:#64748b}
+
+.controls{padding:12px 24px;background:#0f172a;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+
+.chip-group{display:flex;gap:4px}
+.chip{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid #334155;background:transparent;color:#94a3b8;cursor:pointer;transition:all .15s}
+.chip.active{background:#3b82f6;border-color:#3b82f6;color:#fff}
+
+.gamma-wrap{display:flex;align-items:center;gap:8px;margin-left:auto}
+.gamma-label{font-size:11px;color:#64748b;white-space:nowrap}
+input[type=range]{-webkit-appearance:none;width:120px;height:4px;border-radius:2px;background:#334155;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#10b981;cursor:pointer}
+.gamma-val{font-size:12px;font-weight:700;color:#10b981;min-width:28px;text-align:right}
+
+.chart-wrap{padding:8px 16px;flex:1}
+#chart{width:100%;height:calc(100vh - 220px);min-height:420px}
+
+.filter-bar{padding:10px 24px;border-top:1px solid #1e293b;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.filter-label{font-size:11px;color:#64748b;margin-right:4px}
+
+.stats-bar{padding:10px 24px;border-top:1px solid #1e293b;display:flex;gap:24px;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat-label{font-size:10px;color:#64748b}
+.stat-val{font-size:13px;font-weight:700;color:#f1f5f9}
+.stat-val.teal{color:#10b981}
+.stat-val.gold{color:#f59e0b}
+.stat-val.white{color:#e2e8f0}
+
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;gap:12px;color:#475569}
+.spinner{width:32px;height:32px;border:3px solid #1e293b;border-top:3px solid #3b82f6;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase}
+.badge-live{background:#10b981;color:#fff}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">📊 korea-roboAdvisor-etf-frontier <span class="badge badge-live">Live</span></div>
+    <div class="header-sub">한국 IRP/DC 연금 FSC-적격 ETF 효율적 투자선 · 주식 ≤70% · 채권 ≥30%</div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:6px">
+    <div class="chip-group" id="lookback-chips">
+      <button class="chip" data-v="1y">1Y</button>
+      <button class="chip" data-v="2y">2Y</button>
+      <button class="chip active" data-v="3y">3Y</button>
+    </div>
+    <div class="chip-group" id="topn-chips">
+      <button class="chip active" data-v="100">Top-100</button>
+      <button class="chip" data-v="300">Top-300</button>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="gamma-wrap">
+    <span class="gamma-label">위험성향 γ*</span>
+    <span style="font-size:11px;color:#94a3b8">공격</span>
+    <input type="range" id="gamma-slider" min="0.5" max="10" step="0.1" value="2.5"/>
+    <span style="font-size:11px;color:#94a3b8">보수</span>
+    <span class="gamma-val" id="gamma-val">2.5</span>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <span class="filter-label">ETF 자산군</span>
+  <div class="chip-group" id="class-chips">
+    <button class="chip active" data-v="all">전체</button>
+    <button class="chip active" data-v="domestic_equity">국내주식</button>
+    <button class="chip active" data-v="overseas_equity">해외주식</button>
+    <button class="chip active" data-v="domestic_theme">테마</button>
+    <button class="chip active" data-v="bond_money_market">채권/MMF</button>
+    <button class="chip active" data-v="mixed_bond">혼합채권</button>
+    <button class="chip active" data-v="commodity">원자재</button>
+  </div>
+</div>
+
+<div class="chart-wrap">
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div>효율적 투자선 계산 중…</div>
+  </div>
+  <div id="chart" style="display:none"></div>
+</div>
+
+<div class="stats-bar" id="stats-bar" style="display:none">
+  <div class="stat">
+    <span class="stat-label">◆ 최소분산 (MVP)</span>
+    <span class="stat-val white" id="stat-mvp">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">★ 최대샤프</span>
+    <span class="stat-val gold" id="stat-ms">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">● 내 위험성향 포트폴리오</span>
+    <span class="stat-val teal" id="stat-gstar">—</span>
+  </div>
+  <div class="stat" style="margin-left:auto">
+    <span class="stat-label">데이터</span>
+    <span class="stat-val" id="stat-meta" style="font-size:11px;color:#64748b">—</span>
+  </div>
+</div>
+
+<script>
+const CLASS_COLORS = {
+  domestic_equity:  '#3b82f6',
+  overseas_equity:  '#8b5cf6',
+  domestic_theme:   '#ec4899',
+  bond_money_market:'#10b981',
+  mixed_bond:       '#06b6d4',
+  commodity:        '#f59e0b',
+};
+const CLASS_KO = {
+  domestic_equity:  '국내주식',
+  overseas_equity:  '해외주식',
+  domestic_theme:   '테마',
+  bond_money_market:'채권/MMF',
+  mixed_bond:       '혼합채권',
+  commodity:        '원자재',
+};
+
+let state = {
+  lookback: '3y',
+  topN: 100,
+  gamma: 2.5,
+  data: null,
+  visibleClasses: new Set(['domestic_equity','overseas_equity','domestic_theme','bond_money_market','mixed_bond','commodity']),
+};
+
+let gammaDebounce = null;
+
+// ── Controls ──────────────────────────────────────────────────────────────
+
+document.querySelectorAll('#lookback-chips .chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#lookback-chips .chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.lookback = btn.dataset.v;
+    loadData();
+  });
+});
+
+document.querySelectorAll('#topn-chips .chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#topn-chips .chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.topN = parseInt(btn.dataset.v);
+    loadData();
+  });
+});
+
+const gammaSlider = document.getElementById('gamma-slider');
+const gammaValEl  = document.getElementById('gamma-val');
+gammaSlider.addEventListener('input', () => {
+  state.gamma = parseFloat(gammaSlider.value);
+  gammaValEl.textContent = state.gamma.toFixed(1);
+  clearTimeout(gammaDebounce);
+  gammaDebounce = setTimeout(updateGammaStar, 300);
+});
+
+document.querySelectorAll('#class-chips .chip').forEach(btn => {
+  if (btn.dataset.v === 'all') {
+    btn.addEventListener('click', () => {
+      const allActive = btn.classList.contains('active');
+      if (allActive) {
+        state.visibleClasses.clear();
+        document.querySelectorAll('#class-chips .chip').forEach(b => b.classList.remove('active'));
+      } else {
+        state.visibleClasses = new Set(Object.keys(CLASS_COLORS));
+        document.querySelectorAll('#class-chips .chip').forEach(b => b.classList.add('active'));
+      }
+      if (state.data) renderChart();
+    });
+  } else {
+    btn.addEventListener('click', () => {
+      if (state.visibleClasses.has(btn.dataset.v)) {
+        state.visibleClasses.delete(btn.dataset.v);
+        btn.classList.remove('active');
+      } else {
+        state.visibleClasses.add(btn.dataset.v);
+        btn.classList.add('active');
+      }
+      if (state.data) renderChart();
+    });
+  }
+});
+
+// ── Data loading ──────────────────────────────────────────────────────────
+
+async function loadData() {
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('chart').style.display = 'none';
+  document.getElementById('stats-bar').style.display = 'none';
+  try {
+    const url = `/frontier/data?lookback=${state.lookback}&gamma=${state.gamma}&top_n=${state.topN}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.statusText);
+    state.data = await res.json();
+    renderChart();
+    updateStats();
+  } catch(e) {
+    document.getElementById('loading').innerHTML = `<div style="color:#ef4444">오류: ${e.message}</div>`;
+  }
+}
+
+// ── Gamma-only update (no full reload) ────────────────────────────────────
+
+async function updateGammaStar() {
+  if (!state.data) return;
+  try {
+    const url = `/frontier/data?lookback=${state.lookback}&gamma=${state.gamma}&top_n=${state.topN}`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const fresh = await res.json();
+    state.data.special.gamma_star = fresh.special.gamma_star;
+    // Update only the gamma_star trace (index 4 in our layout)
+    const sp = state.data.special.gamma_star;
+    const eq = sp.equity_pct;
+    Plotly.restyle('chart', {
+      x: [[sp.sigma * 100]],
+      y: [[sp.mu * 100]],
+      text: [[`● 내 위험성향<br>주식 ${eq}% | 채권 ${sp.safe_pct}%<br>σ=${(sp.sigma*100).toFixed(1)}% μ=${(sp.mu*100).toFixed(1)}%<br>Sharpe ${sp.sharpe.toFixed(2)}`]],
+    }, 4);
+    updateStats();
+  } catch(e) { /* silent */ }
+}
+
+// ── Chart rendering ───────────────────────────────────────────────────────
+
+function renderChart() {
+  document.getElementById('loading').style.display = 'none';
+  const chartEl = document.getElementById('chart');
+  chartEl.style.display = 'block';
+  document.getElementById('stats-bar').style.display = 'flex';
+
+  const d = state.data;
+
+  // Trace 0: Monte Carlo heat (Sharpe-coloured scatter)
+  const mcX = d.monte_carlo.map(p => p.sigma * 100);
+  const mcY = d.monte_carlo.map(p => p.mu * 100);
+  const mcC = d.monte_carlo.map(p => p.sharpe);
+  const trMC = {
+    x: mcX, y: mcY,
+    mode: 'markers',
+    type: 'scatter',
+    name: '무작위 포트폴리오',
+    marker: {
+      color: mcC,
+      colorscale: 'Viridis',
+      size: 3,
+      opacity: 0.4,
+      colorbar: {
+        title: 'Sharpe',
+        thickness: 12,
+        len: 0.6,
+        x: 1.01,
+        tickfont: {size: 10, color: '#94a3b8'},
+        titlefont: {size: 11, color: '#94a3b8'},
+      },
+    },
+    hovertemplate: 'σ=%{x:.1f}%<br>μ=%{y:.1f}%<br>Sharpe=%{marker.color:.2f}<extra></extra>',
+  };
+
+  // Trace 1: Frontier curve
+  const fcX = d.frontier_curve.map(p => p.sigma * 100);
+  const fcY = d.frontier_curve.map(p => p.mu * 100);
+  const trFrontier = {
+    x: fcX, y: fcY,
+    mode: 'lines',
+    type: 'scatter',
+    name: '효율적 투자선 (FSC)',
+    line: {color: '#60a5fa', width: 2.5, dash: 'solid'},
+    hovertemplate: 'σ=%{x:.1f}%  μ=%{y:.1f}%<extra>효율적 투자선</extra>',
+  };
+
+  // Trace 2: Individual ETF scatter (per asset class)
+  const etfTraces = [];
+  const classGroups = {};
+  d.scatter_etfs.forEach(e => {
+    if (!state.visibleClasses.has(e.asset_class)) return;
+    if (!classGroups[e.asset_class]) classGroups[e.asset_class] = [];
+    classGroups[e.asset_class].push(e);
+  });
+  Object.entries(classGroups).forEach(([cls, etfs]) => {
+    etfTraces.push({
+      x: etfs.map(e => e.sigma * 100),
+      y: etfs.map(e => e.mu * 100),
+      mode: 'markers',
+      type: 'scatter',
+      name: CLASS_KO[cls] || cls,
+      marker: {color: CLASS_COLORS[cls] || '#94a3b8', size: 7, symbol: 'circle', opacity: 0.85,
+               line: {color: '#0f172a', width: 0.5}},
+      text: etfs.map(e =>
+        `${e.name}<br>σ=${(e.sigma*100).toFixed(1)}% μ=${(e.mu*100).toFixed(1)}%<br>Sharpe ${e.sharpe.toFixed(2)}<br>${e.signal}`
+      ),
+      hovertemplate: '%{text}<extra></extra>',
+    });
+  });
+
+  // Trace 3: MVP
+  const mvp = d.special.mvp;
+  const trMVP = {
+    x: [mvp.sigma * 100], y: [mvp.mu * 100],
+    mode: 'markers+text', type: 'scatter',
+    name: '◆ 최소분산 (MVP)',
+    marker: {color: '#e2e8f0', size: 14, symbol: 'diamond', line: {color: '#0f172a', width: 1}},
+    text: ['  MVP'],
+    textposition: 'middle right',
+    textfont: {color: '#e2e8f0', size: 11},
+    hovertemplate: `◆ 최소분산 포트폴리오<br>σ=${(mvp.sigma*100).toFixed(1)}%<br>μ=${(mvp.mu*100).toFixed(1)}%<br>Sharpe ${mvp.sharpe.toFixed(2)}<extra></extra>`,
+  };
+
+  // Trace 4: Max Sharpe
+  const ms = d.special.max_sharpe;
+  const trMS = {
+    x: [ms.sigma * 100], y: [ms.mu * 100],
+    mode: 'markers+text', type: 'scatter',
+    name: '★ 최대샤프',
+    marker: {color: '#f59e0b', size: 16, symbol: 'star', line: {color: '#0f172a', width: 1}},
+    text: ['  Max Sharpe'],
+    textposition: 'middle right',
+    textfont: {color: '#f59e0b', size: 11},
+    hovertemplate: `★ 최대샤프 포트폴리오<br>σ=${(ms.sigma*100).toFixed(1)}%<br>μ=${(ms.mu*100).toFixed(1)}%<br>Sharpe ${ms.sharpe.toFixed(2)}<extra></extra>`,
+  };
+
+  // Trace 5: γ* point
+  const sp = d.special.gamma_star;
+  const trGstar = {
+    x: [sp.sigma * 100], y: [sp.mu * 100],
+    mode: 'markers+text', type: 'scatter',
+    name: '● 내 위험성향',
+    marker: {color: '#10b981', size: 14, symbol: 'circle', line: {color: '#0f172a', width: 1}},
+    text: [`  γ*=${state.gamma.toFixed(1)}`],
+    textposition: 'middle right',
+    textfont: {color: '#10b981', size: 11},
+    hovertemplate: `● 내 위험성향 포트폴리오<br>주식 ${sp.equity_pct}% | 채권 ${sp.safe_pct}%<br>σ=${(sp.sigma*100).toFixed(1)}%<br>μ=${(sp.mu*100).toFixed(1)}%<br>Sharpe ${sp.sharpe.toFixed(2)}<extra></extra>`,
+  };
+
+  const traces = [trMC, trFrontier, ...etfTraces, trMVP, trMS, trGstar];
+
+  const layout = {
+    paper_bgcolor: '#0f172a',
+    plot_bgcolor:  '#0f172a',
+    font: {color: '#94a3b8', family: 'Pretendard, Noto Sans KR, sans-serif', size: 11},
+    xaxis: {
+      title: {text: '연간 변동성 (σ)', font: {size: 12, color: '#64748b'}},
+      gridcolor: '#1e293b', zerolinecolor: '#1e293b',
+      ticksuffix: '%', tickfont: {size: 10},
+    },
+    yaxis: {
+      title: {text: '연간 기대수익률 (μ)', font: {size: 12, color: '#64748b'}},
+      gridcolor: '#1e293b', zerolinecolor: '#1e293b',
+      ticksuffix: '%', tickfont: {size: 10},
+    },
+    legend: {
+      bgcolor: 'rgba(15,23,42,0.85)', bordercolor: '#1e293b', borderwidth: 1,
+      font: {size: 10}, x: 0.01, y: 0.99,
+    },
+    margin: {l: 60, r: 60, t: 16, b: 50},
+    hovermode: 'closest',
+    showlegend: true,
+  };
+
+  const config = {
+    displayModeBar: true,
+    modeBarButtonsToRemove: ['toImage','sendDataToCloud'],
+    displaylogo: false,
+    responsive: true,
+  };
+
+  Plotly.newPlot('chart', traces, layout, config);
+  updateStats();
+}
+
+function updateStats() {
+  if (!state.data) return;
+  const {mvp, max_sharpe, gamma_star} = state.data.special;
+  const m = state.data.meta;
+  document.getElementById('stat-mvp').textContent =
+    `σ=${(mvp.sigma*100).toFixed(1)}%  μ=${(mvp.mu*100).toFixed(1)}%  SR=${mvp.sharpe.toFixed(2)}`;
+  document.getElementById('stat-ms').textContent =
+    `σ=${(max_sharpe.sigma*100).toFixed(1)}%  μ=${(max_sharpe.mu*100).toFixed(1)}%  SR=${max_sharpe.sharpe.toFixed(2)}`;
+  document.getElementById('stat-gstar').textContent =
+    `주식 ${gamma_star.equity_pct}%  채권 ${gamma_star.safe_pct}%  μ=${(gamma_star.mu*100).toFixed(1)}%  SR=${gamma_star.sharpe.toFixed(2)}`;
+  document.getElementById('stat-meta').textContent =
+    `ETF ${m.n_etfs}개 · ${m.weeks}주 데이터 · ${m.lookback} 룩백`;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
