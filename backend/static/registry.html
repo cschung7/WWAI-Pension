@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>연금 전략 레지스트리 — WWAI Pension</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  :root {
+    --bg:       #0f172a;
+    --bg2:      #1e293b;
+    --bg3:      #334155;
+    --text:     #f8fafc;
+    --muted:    #94a3b8;
+    --border:   #475569;
+    --blue:     #3b82f6;
+    --green:    #10b981;
+    --orange:   #f59e0b;
+    --red:      #ef4444;
+    --gold:     #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Pretendard', -apple-system, sans-serif; }
+
+  /* ── NAV ── */
+  nav { display:flex; align-items:center; gap:1rem; padding:.75rem 1.5rem; background:var(--bg2); border-bottom:1px solid var(--border); }
+  nav .logo { font-weight:700; font-size:1.1rem; color:var(--gold); text-decoration:none; }
+  nav a { color:var(--muted); text-decoration:none; font-size:.875rem; }
+  nav a:hover, nav a.active { color:var(--text); }
+  nav .spacer { flex:1; }
+
+  /* ── HERO ── */
+  .hero { padding:2rem 1.5rem 1rem; }
+  .hero h1 { font-size:1.5rem; font-weight:700; }
+  .hero p  { color:var(--muted); font-size:.875rem; margin-top:.25rem; }
+
+  /* ── WORLD MAP ── */
+  .world-map-section {
+    margin: 0 1.5rem 1rem;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: .75rem;
+    padding: 1rem 1.25rem .5rem;
+  }
+  .world-map-section h2 { font-size: 1rem; font-weight: 600; margin-bottom: .5rem; }
+  #world-map { height: 340px; }
+  .map-legend {
+    display: flex; gap: 1rem; flex-wrap: wrap; padding: .25rem 0 .5rem;
+    font-size: .75rem; color: var(--muted);
+  }
+  .map-legend-item { display: flex; align-items: center; gap: .35rem; }
+  .map-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* ── DEMAND CONFIGURATOR ── */
+  .configurator {
+    margin:1rem 1.5rem;
+    background:var(--bg2);
+    border:1px solid var(--border);
+    border-radius:.75rem;
+    padding:1.25rem;
+  }
+  .configurator h2 { font-size:1rem; font-weight:600; margin-bottom:.75rem; }
+  .configurator .row { display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-end; }
+  .config-field { display:flex; flex-direction:column; gap:.25rem; min-width:160px; }
+  .config-field label { font-size:.75rem; color:var(--muted); }
+  .config-field input[type=range] { accent-color:var(--blue); }
+  .config-field .val { font-size:.875rem; font-weight:600; color:var(--blue); }
+  .config-result {
+    margin-top:.75rem; padding:.75rem 1rem;
+    background:var(--bg3); border-radius:.5rem;
+    font-size:.875rem; display:none;
+  }
+  .config-result.visible { display:block; }
+  .config-result .tier-badge {
+    display:inline-block; padding:.2rem .6rem; border-radius:999px;
+    font-size:.75rem; font-weight:700; margin-right:.5rem;
+  }
+
+  /* ── FILTERS ── */
+  .filters { display:flex; gap:.75rem; flex-wrap:wrap; padding:0 1.5rem 1rem; align-items:center; }
+  .chip {
+    padding:.3rem .85rem; border-radius:999px; border:1px solid var(--border);
+    background:transparent; color:var(--muted); cursor:pointer; font-size:.8rem;
+    transition:all .15s;
+  }
+  .chip:hover { border-color:var(--blue); color:var(--text); }
+  .chip.active { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .chip[data-tier="T1"].active { background:var(--green); border-color:var(--green); }
+  .chip[data-tier="T2"].active { background:var(--blue); border-color:var(--blue); }
+  .chip[data-tier="T3"].active { background:var(--orange); border-color:var(--orange); }
+  .chip[data-tier="T4"].active { background:var(--red); border-color:var(--red); }
+  .toggle-fsc { display:flex; align-items:center; gap:.4rem; cursor:pointer; font-size:.8rem; color:var(--muted); }
+  .toggle-fsc input { accent-color:var(--green); }
+  .filters-sep { width:1px; height:1.25rem; background:var(--border); }
+  .scatter-link { margin-left:auto; }
+  .scatter-link a {
+    display:inline-flex; align-items:center; gap:.4rem;
+    padding:.3rem .85rem; border-radius:.5rem; border:1px solid var(--blue);
+    color:var(--blue); text-decoration:none; font-size:.8rem;
+  }
+  .scatter-link a:hover { background:var(--blue); color:#fff; }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x:auto; padding:0 1.5rem 2rem; }
+  table { width:100%; border-collapse:collapse; font-size:.8rem; }
+  th {
+    background:var(--bg2); color:var(--muted); text-transform:uppercase;
+    font-size:.7rem; letter-spacing:.05em; padding:.6rem .75rem;
+    text-align:left; cursor:pointer; user-select:none; white-space:nowrap;
+    border-bottom:1px solid var(--border);
+  }
+  th:hover { color:var(--text); }
+  th .sort-icon { margin-left:.25rem; opacity:.4; }
+  th.sorted .sort-icon { opacity:1; color:var(--blue); }
+  td { padding:.6rem .75rem; border-bottom:1px solid var(--bg3); }
+  tr:hover td { background:var(--bg2); cursor:pointer; }
+  .tier-chip {
+    display:inline-block; padding:.15rem .55rem; border-radius:999px;
+    font-size:.7rem; font-weight:700; white-space:nowrap;
+  }
+  .fsc-badge {
+    display:inline-block; padding:.15rem .45rem; border-radius:.25rem;
+    font-size:.65rem; font-weight:700;
+    background:rgba(16,185,129,.15); color:#10b981; border:1px solid rgba(16,185,129,.3);
+  }
+  .metric-good { color:#10b981; }
+  .metric-ok   { color:#f59e0b; }
+  .metric-bad  { color:#ef4444; }
+  .star { color:var(--gold); }
+  .no-data { padding:3rem 1.5rem; text-align:center; color:var(--muted); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.7);
+    z-index:100; align-items:center; justify-content:center;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal {
+    background:var(--bg2); border:1px solid var(--border); border-radius:.75rem;
+    width:min(700px,95vw); max-height:85vh; overflow-y:auto;
+    padding:1.5rem;
+  }
+  .modal h3 { font-size:1rem; font-weight:600; margin-bottom:.5rem; }
+  .modal .metric-row { display:flex; gap:1.5rem; flex-wrap:wrap; margin:.75rem 0; font-size:.8rem; }
+  .modal .metric-item { }
+  .modal .metric-item .lbl { color:var(--muted); font-size:.7rem; }
+  .modal .metric-item .val { font-weight:700; font-size:.95rem; }
+  .modal-close {
+    float:right; background:none; border:none; color:var(--muted);
+    font-size:1.25rem; cursor:pointer; line-height:1;
+  }
+  .modal-close:hover { color:var(--text); }
+  #equity-chart { margin-top:.75rem; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width:640px) {
+    .hero { padding:1rem; }
+    .table-wrap { padding:0 .75rem 1.5rem; }
+    .filters { padding:0 .75rem .75rem; }
+    .configurator { margin:1rem .75rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="logo">WWAI Pension</a>
+  <a href="/frontier">전략 프론티어</a>
+  <a href="/registry" class="active">전략 레지스트리</a>
+  <a href="/scatter">전략 지도</a>
+  <span class="spacer"></span>
+  <a href="https://pension.wwai.app" style="color:var(--gold)">▶ 연금 진단 시작</a>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <h1>연금 전략 레지스트리</h1>
+  <p>FSC IRP/DC 적합 포함 20개 백테스트 전략 | 위험-수익 구간별 필터 | 2022.01–2026.03 (4.2년)</p>
+</div>
+
+<!-- WORLD MAP -->
+<div class="world-map-section">
+  <h2>🌍 AEGIS 글로벌 연금 전략 지도</h2>
+  <div id="world-map"></div>
+  <div class="map-legend">
+    <span style="color:var(--muted);font-size:.75rem">마커 크기 = Calmar 비율 &nbsp;|&nbsp; 클릭 시 상세 보기</span>
+    <div class="map-legend-item"><div class="map-legend-dot" style="background:#10b981"></div>SR ≥ 3.0</div>
+    <div class="map-legend-item"><div class="map-legend-dot" style="background:#3b82f6"></div>SR ≥ 2.0</div>
+    <div class="map-legend-item"><div class="map-legend-dot" style="background:#f59e0b"></div>SR ≥ 1.0</div>
+    <div class="map-legend-item"><div class="map-legend-dot" style="background:#94a3b8"></div>SR &lt; 1.0</div>
+  </div>
+</div>
+
+<!-- DEMAND CONFIGURATOR -->
+<div class="configurator">
+  <h2>🎯 나의 전략 찾기</h2>
+  <div class="row">
+    <div class="config-field">
+      <label>목표 수익률 (연)</label>
+      <input type="range" id="cfg-return" min="5" max="45" step="1" value="15">
+      <span class="val" id="cfg-return-val">15%</span>
+    </div>
+    <div class="config-field">
+      <label>최대 허용 낙폭</label>
+      <input type="range" id="cfg-dd" min="5" max="40" step="1" value="18">
+      <span class="val" id="cfg-dd-val">-18%</span>
+    </div>
+    <div class="config-field" style="justify-content:flex-end">
+      <button onclick="findStrategy()" style="padding:.4rem 1rem; background:var(--blue); color:#fff; border:none; border-radius:.4rem; cursor:pointer; font-size:.85rem;">
+        전략 찾기
+      </button>
+    </div>
+  </div>
+  <div class="config-result" id="config-result"></div>
+</div>
+
+<!-- FILTERS -->
+<div class="filters">
+  <button class="chip active" data-tier="ALL" onclick="setTierFilter('ALL',this)">전체</button>
+  <button class="chip" data-tier="T1" onclick="setTierFilter('T1',this)">안심형 ≥7%</button>
+  <button class="chip" data-tier="T2" onclick="setTierFilter('T2',this)">균형형 ≥15%</button>
+  <button class="chip" data-tier="T3" onclick="setTierFilter('T3',this)">성장형 ≥25%</button>
+  <button class="chip" data-tier="T4" onclick="setTierFilter('T4',this)">적극형 ≥35%</button>
+  <span class="filters-sep"></span>
+  <label class="toggle-fsc">
+    <input type="checkbox" id="fsc-toggle" onchange="renderTable()">
+    FSC 적합만 보기
+  </label>
+  <span class="filters-sep"></span>
+  <div class="scatter-link">
+    <a href="/scatter">📊 전략 지도 (버블차트)</a>
+  </div>
+</div>
+
+<!-- TABLE -->
+<div class="table-wrap">
+  <table id="reg-table">
+    <thead>
+      <tr>
+        <th onclick="sortTable('strategy_label')">전략명 <span class="sort-icon">↕</span></th>
+        <th onclick="sortTable('tier')">위험등급 <span class="sort-icon">↕</span></th>
+        <th onclick="sortTable('cagr')">CAGR <span class="sort-icon">↕</span></th>
+        <th onclick="sortTable('maxdd')">최대낙폭 <span class="sort-icon">↕</span></th>
+        <th onclick="sortTable('calmar')">Calmar <span class="sort-icon">↕</span></th>
+        <th onclick="sortTable('sharpe')">Sharpe <span class="sort-icon">↕</span></th>
+        <th onclick="sortTable('turnover')">회전율 <span class="sort-icon">↕</span></th>
+        <th onclick="sortTable('bond_pct')">채권% <span class="sort-icon">↕</span></th>
+        <th>FSC</th>
+        <th>기간</th>
+        <th>상세</th>
+      </tr>
+    </thead>
+    <tbody id="reg-tbody">
+      <tr><td colspan="11" class="no-data">로딩 중...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- EQUITY MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModalDirect()">✕</button>
+    <h3 id="modal-title">전략 상세</h3>
+    <div class="metric-row" id="modal-metrics"></div>
+    <div id="equity-chart" style="height:280px;"></div>
+    <p style="font-size:.7rem; color:var(--muted); margin-top:.75rem;">
+      백테스트 2022.01–2026.03 (4.2년). 과거 성과가 미래를 보장하지 않습니다.
+    </p>
+  </div>
+</div>
+
+<script>
+let allRuns = [];
+let sortKey = 'calmar';
+let sortAsc = false;
+let tierFilter = 'ALL';
+
+const TIER_COLORS = { T1:'#10b981', T2:'#3b82f6', T3:'#f59e0b', T4:'#ef4444' };
+const TIER_LABELS = { T1:'안심형', T2:'균형형', T3:'성장형', T4:'적극형' };
+const TIER_THRESHOLDS = {
+  T1: { minCagr:7,  maxDd:-10 },
+  T2: { minCagr:15, maxDd:-18 },
+  T3: { minCagr:25, maxDd:-25 },
+  T4: { minCagr:35, maxDd:-99 },
+};
+
+function setTierFilter(tier, el) {
+  tierFilter = tier;
+  document.querySelectorAll('[data-tier]').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+}
+
+function sortTable(key) {
+  if (sortKey === key) sortAsc = !sortAsc;
+  else { sortKey = key; sortAsc = false; }
+  document.querySelectorAll('th').forEach(th => {
+    th.classList.remove('sorted');
+    const icon = th.querySelector('.sort-icon');
+    if (icon) icon.textContent = '↕';
+  });
+  const sorted = document.querySelector(`th[onclick="sortTable('${key}')"]`);
+  if (sorted) {
+    sorted.classList.add('sorted');
+    sorted.querySelector('.sort-icon').textContent = sortAsc ? '↑' : '↓';
+  }
+  renderTable();
+}
+
+function renderTable() {
+  const fscOnly = document.getElementById('fsc-toggle').checked;
+  let runs = allRuns.filter(r => {
+    if (fscOnly && !r.fsc_compliant) return false;
+    if (tierFilter !== 'ALL' && r.tier !== tierFilter) return false;
+    return true;
+  });
+
+  // Sort
+  runs.sort((a,b) => {
+    let va = a[sortKey], vb = b[sortKey];
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  if (!runs.length) {
+    document.getElementById('reg-tbody').innerHTML =
+      '<tr><td colspan="11" class="no-data">조건에 맞는 전략이 없습니다</td></tr>';
+    return;
+  }
+
+  const rows = runs.map(r => {
+    const tc = TIER_COLORS[r.tier] || '#666';
+    const tierChip = `<span class="tier-chip" style="background:${tc}22;color:${tc};border:1px solid ${tc}44">${r.tier_label}</span>`;
+    const fscBadge = r.fsc_compliant ? '<span class="fsc-badge">FSC ✓</span>' : '<span style="color:var(--muted);font-size:.7rem">—</span>';
+    const calmarColor = r.calmar >= 1.5 ? 'metric-good' : r.calmar >= 1.0 ? 'metric-ok' : 'metric-bad';
+    const ddColor    = Math.abs(r.maxdd) <= 15 ? 'metric-good' : Math.abs(r.maxdd) <= 25 ? 'metric-ok' : 'metric-bad';
+    const cagrColor  = r.cagr >= 25 ? 'metric-good' : r.cagr >= 15 ? 'metric-ok' : '';
+    const isBest = r.strategy_label.includes('★');
+    return `<tr onclick="openModal(${r.run_id})">
+      <td>${isBest ? '<span class="star">★</span> ' : ''}${r.strategy_label.replace(' ★','')}</td>
+      <td>${tierChip}</td>
+      <td class="${cagrColor}">${r.cagr.toFixed(1)}%</td>
+      <td class="${ddColor}">${r.maxdd.toFixed(1)}%</td>
+      <td class="${calmarColor}">${r.calmar.toFixed(3)}</td>
+      <td>${r.sharpe.toFixed(3)}</td>
+      <td>${r.turnover > 0 ? r.turnover.toFixed(1)+'%' : '—'}</td>
+      <td>${r.bond_pct > 0 ? '<span style="color:var(--green)">'+r.bond_pct+'%</span>' : '—'}</td>
+      <td>${fscBadge}</td>
+      <td style="color:var(--muted);font-size:.7rem">4.2년</td>
+      <td style="color:var(--blue);font-size:.75rem">▶</td>
+    </tr>`;
+  });
+
+  document.getElementById('reg-tbody').innerHTML = rows.join('');
+}
+
+// ── DEMAND CONFIGURATOR ──
+document.getElementById('cfg-return').addEventListener('input', function() {
+  document.getElementById('cfg-return-val').textContent = this.value + '%';
+});
+document.getElementById('cfg-dd').addEventListener('input', function() {
+  document.getElementById('cfg-dd-val').textContent = '-' + this.value + '%';
+});
+
+function findStrategy() {
+  const targetReturn = +document.getElementById('cfg-return').value;
+  const maxDdAbs     = +document.getElementById('cfg-dd').value;
+
+  // Find best tier matching constraints
+  let matchTier = null;
+  for (const [tier, th] of Object.entries(TIER_THRESHOLDS)) {
+    if (targetReturn >= th.minCagr && -maxDdAbs >= th.maxDd) {
+      matchTier = tier;
+      break;
+    }
+  }
+
+  const result = document.getElementById('config-result');
+  if (!matchTier) {
+    result.className = 'config-result visible';
+    result.innerHTML = '⚠️ 입력 조건에 맞는 전략 유형이 없습니다. 수익률 기대치를 낮추거나 낙폭 허용치를 높여보세요.';
+    return;
+  }
+
+  const tc = TIER_COLORS[matchTier];
+  const tl = TIER_LABELS[matchTier];
+  const matching = allRuns.filter(r => r.tier === matchTier && r.cagr >= targetReturn && Math.abs(r.maxdd) <= maxDdAbs);
+  const best = matching.sort((a,b) => b.calmar - a.calmar)[0];
+
+  result.className = 'config-result visible';
+  if (best) {
+    result.innerHTML = `추천 위험등급: <span class="tier-badge" style="background:${tc}22;color:${tc}">${tl} (${matchTier})</span>
+      최적 전략: <strong>${best.strategy_label}</strong> — CAGR <strong>${best.cagr.toFixed(1)}%</strong>, MaxDD <strong>${best.maxdd.toFixed(1)}%</strong>, Calmar <strong>${best.calmar.toFixed(2)}</strong>
+      ${best.fsc_compliant ? '&nbsp;<span class="fsc-badge">FSC ✓</span>' : ''}`;
+  } else {
+    result.innerHTML = `추천 위험등급: <span class="tier-badge" style="background:${tc}22;color:${tc}">${tl} (${matchTier})</span>
+      — 해당 조건을 정확히 만족하는 전략은 없지만, ${tl} 전략을 참고해 주세요.`;
+  }
+
+  // Highlight tier filter
+  setTierFilter(matchTier, document.querySelector(`[data-tier="${matchTier}"]`));
+}
+
+// ── MODAL ──
+async function openModal(runId) {
+  try {
+    const res = await fetch(`/registry/${runId}/equity`);
+    const data = await res.json();
+
+    document.getElementById('modal-title').textContent =
+      (data.product || '') + ' — ' + (data.experiment || '');
+
+    document.getElementById('modal-metrics').innerHTML = `
+      <div class="metric-item"><div class="lbl">CAGR</div><div class="val" style="color:#10b981">${data.cagr.toFixed(1)}%</div></div>
+      <div class="metric-item"><div class="lbl">MaxDD</div><div class="val" style="color:#f59e0b">${data.maxdd.toFixed(1)}%</div></div>
+      <div class="metric-item"><div class="lbl">Calmar</div><div class="val">${data.calmar.toFixed(3)}</div></div>
+      <div class="metric-item"><div class="lbl">Sharpe</div><div class="val">${data.sharpe.toFixed(3)}</div></div>
+    `;
+
+    const equity = data.equity || [];
+    if (equity.length > 0) {
+      const dates = equity.map(p => Array.isArray(p) ? p[0] : p.date);
+      const vals  = equity.map(p => Array.isArray(p) ? p[1] : p.value);
+      Plotly.newPlot('equity-chart', [{
+        x: dates, y: vals, type: 'scatter', mode: 'lines',
+        line: { color: '#3b82f6', width: 2 },
+        fill: 'tozeroy', fillcolor: 'rgba(59,130,246,0.1)',
+      }], {
+        paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+        margin:{t:10,b:40,l:50,r:10},
+        xaxis:{color:'#94a3b8', gridcolor:'#334155'},
+        yaxis:{color:'#94a3b8', gridcolor:'#334155', tickformat:'.1f', ticksuffix:'%'},
+        font:{color:'#f8fafc',size:11},
+        hovermode:'x unified',
+      }, { responsive:true, displayModeBar:false });
+    } else {
+      document.getElementById('equity-chart').innerHTML =
+        '<p style="color:var(--muted);padding:2rem;text-align:center">수익 곡선 데이터 없음</p>';
+    }
+
+    document.getElementById('modal-overlay').classList.add('open');
+  } catch(e) {
+    alert('상세 데이터 로드 실패: ' + e.message);
+  }
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
+}
+function closeModalDirect() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ── WORLD MAP ──
+const MARKET_GEO = {
+  'india_active_b30':  { name: '인도 (India)',       lat: 20.6,  lon:  79.0,  flag: '🇮🇳' },
+  'japan_active_b30':  { name: '일본 (Japan)',       lat: 36.2,  lon: 138.3,  flag: '🇯🇵' },
+  'usa_active_b30':    { name: '미국 (USA)',         lat: 37.1,  lon: -97.2,  flag: '🇺🇸' },
+  'hk_active_b30':     { name: '홍콩 (Hong Kong)',   lat: 22.3,  lon: 114.2,  flag: '🇭🇰' },
+  'china_active_b30':  { name: '중국 (China)',       lat: 35.9,  lon: 104.0,  flag: '🇨🇳' },
+  'krx_active_b30':   { name: '한국 (KRX)',         lat: 36.5,  lon: 127.5,  flag: '🇰🇷' },
+};
+
+function srColor(sr) {
+  if (sr >= 3.0) return '#10b981';
+  if (sr >= 2.0) return '#3b82f6';
+  if (sr >= 1.0) return '#f59e0b';
+  return '#94a3b8';
+}
+
+function buildWorldMap(runs) {
+  const marketRuns = runs.filter(r => MARKET_GEO[r.strategy]);
+  if (!marketRuns.length) return;
+
+  const lats = [], lons = [], texts = [], colors = [], sizes = [], runIds = [], names = [];
+  for (const r of marketRuns) {
+    const geo = MARKET_GEO[r.strategy];
+    lats.push(geo.lat);
+    lons.push(geo.lon);
+    names.push(geo.flag + ' ' + geo.name);
+    colors.push(srColor(r.sharpe));
+    sizes.push(Math.max(r.calmar * 5, 10));
+    runIds.push(r.run_id);
+    texts.push(
+      `<b>${geo.flag} ${geo.name}</b><br>` +
+      `SR: <b>${r.sharpe.toFixed(3)}</b><br>` +
+      `CAGR: <b>${r.cagr.toFixed(1)}%</b><br>` +
+      `MaxDD: <b>${r.maxdd.toFixed(2)}%</b><br>` +
+      `Calmar: <b>${r.calmar.toFixed(3)}</b><br>` +
+      `${r.fsc_compliant ? 'FSC ✓' : ''}`
+    );
+  }
+
+  const trace = {
+    type: 'scattergeo',
+    mode: 'markers+text',
+    lat: lats, lon: lons,
+    text: names,
+    textposition: 'top center',
+    hovertext: texts,
+    hoverinfo: 'text',
+    customdata: runIds,
+    marker: {
+      size: sizes,
+      color: colors,
+      opacity: 0.9,
+      line: { color: '#ffffff', width: 1.5 },
+    },
+    textfont: { color: '#f8fafc', size: 11 },
+  };
+
+  const layout = {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor:  'transparent',
+    margin: { t: 0, b: 0, l: 0, r: 0 },
+    geo: {
+      showframe: false,
+      showcoastlines: true, coastlinecolor: '#475569', coastlinewidth: 0.8,
+      showland: true, landcolor: '#1e293b',
+      showocean: true, oceancolor: '#0f172a',
+      showcountries: true, countrycolor: '#334155', countrywidth: 0.5,
+      showlakes: false,
+      projection: { type: 'natural earth' },
+      bgcolor: 'transparent',
+    },
+    font: { color: '#f8fafc' },
+  };
+
+  Plotly.newPlot('world-map', [trace], layout, { responsive: true, displayModeBar: false });
+
+  document.getElementById('world-map').on('plotly_click', function(d) {
+    const pt = d.points[0];
+    if (pt && pt.customdata) openModal(pt.customdata);
+  });
+}
+
+async function loadData() {
+  try {
+    const res = await fetch('/registry/data');
+    const data = await res.json();
+    allRuns = data.runs || [];
+    renderTable();
+    buildWorldMap(allRuns);
+  } catch(e) {
+    document.getElementById('reg-tbody').innerHTML =
+      '<tr><td colspan="11" class="no-data">데이터 로드 실패: ' + e.message + '</td></tr>';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>

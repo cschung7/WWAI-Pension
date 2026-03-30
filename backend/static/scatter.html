@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>연금 전략 지도 — WWAI Pension</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  :root {
+    --bg:#0f172a; --bg2:#1e293b; --bg3:#334155;
+    --text:#f8fafc; --muted:#94a3b8; --border:#475569;
+    --blue:#3b82f6; --gold:#fbbf24;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Pretendard',-apple-system,sans-serif; }
+
+  nav { display:flex; align-items:center; gap:1rem; padding:.75rem 1.5rem; background:var(--bg2); border-bottom:1px solid var(--border); }
+  nav .logo { font-weight:700; font-size:1.1rem; color:var(--gold); text-decoration:none; }
+  nav a { color:var(--muted); text-decoration:none; font-size:.875rem; }
+  nav a:hover, nav a.active { color:var(--text); }
+  nav .spacer { flex:1; }
+
+  .hero { padding:1.5rem 1.5rem .5rem; }
+  .hero h1 { font-size:1.4rem; font-weight:700; }
+  .hero p { color:var(--muted); font-size:.875rem; margin-top:.25rem; }
+
+  .summary-bar {
+    display:flex; gap:1rem; flex-wrap:wrap;
+    padding:.75rem 1.5rem; border-bottom:1px solid var(--border);
+  }
+  .summary-item {
+    display:flex; flex-direction:column;
+    background:var(--bg2); border:1px solid var(--border);
+    border-radius:.5rem; padding:.5rem .85rem; min-width:100px;
+  }
+  .summary-item .lbl { font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .summary-item .val { font-size:1rem; font-weight:700; }
+
+  .chart-wrap { padding:1rem 1.5rem; }
+  #scatter-plot { width:100%; height:calc(100vh - 280px); min-height:400px; }
+
+  .legend-strip {
+    display:flex; gap:1rem; flex-wrap:wrap;
+    padding:.5rem 1.5rem 1rem; font-size:.75rem; color:var(--muted);
+  }
+  .legend-item { display:flex; align-items:center; gap:.35rem; }
+  .legend-dot { width:10px; height:10px; border-radius:50%; }
+
+  .benchmark-note {
+    padding:.5rem 1.5rem 1.5rem; font-size:.7rem; color:var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo">WWAI Pension</a>
+  <a href="/frontier">전략 프론티어</a>
+  <a href="/registry">전략 레지스트리</a>
+  <a href="/scatter" class="active">전략 지도</a>
+  <span class="spacer"></span>
+  <a href="https://pension.wwai.app" style="color:var(--gold)">▶ 연금 진단 시작</a>
+</nav>
+
+<div class="hero">
+  <h1>연금 전략 지도</h1>
+  <p>X = 최대낙폭 | Y = 연환산수익률 | 버블크기 = Calmar 비율 | 색상 = 위험등급</p>
+</div>
+
+<div class="summary-bar" id="summary-bar">
+  <div class="summary-item"><div class="lbl">총 전략</div><div class="val" id="sum-total">—</div></div>
+  <div class="summary-item"><div class="lbl">FSC 적합</div><div class="val" id="sum-fsc" style="color:#10b981">—</div></div>
+  <div class="summary-item"><div class="lbl">최고 Calmar</div><div class="val" id="sum-calmar" style="color:#3b82f6">—</div></div>
+  <div class="summary-item"><div class="lbl">최저 낙폭</div><div class="val" id="sum-dd" style="color:#f59e0b">—</div></div>
+</div>
+
+<div class="chart-wrap">
+  <div id="scatter-plot"></div>
+</div>
+
+<div class="legend-strip">
+  <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>안심형 (T1)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>균형형 (T2)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>성장형 (T3)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>적극형 (T4)</div>
+  <div class="legend-item" style="margin-left:1rem"><div class="legend-dot" style="background:#fff;border:2px solid #10b981"></div>FSC 적합 (원테두리)</div>
+  <div class="legend-item" style="margin-left:auto"><span>버블 크기 = Calmar 비율</span></div>
+</div>
+
+<div class="benchmark-note">
+  점선: FSC IRP 위험자산 한도 가이드라인. 기준선: CAGR=7%(안심), 15%(균형), 25%(성장), 35%(적극) / MaxDD=-10%, -18%, -25%.
+  백테스트 2022.01–2026.03 (4.2년). 과거 성과가 미래를 보장하지 않습니다.
+</div>
+
+<script>
+async function loadAndRender() {
+  let data;
+  try {
+    const res = await fetch('/registry/summary');
+    data = await res.json();
+  } catch(e) {
+    document.getElementById('scatter-plot').innerHTML =
+      '<p style="color:#94a3b8;padding:3rem;text-align:center">데이터 로드 실패: ' + e.message + '</p>';
+    return;
+  }
+
+  const pts = data.scatter || [];
+  document.getElementById('sum-total').textContent   = data.total || 0;
+  document.getElementById('sum-fsc').textContent     = (data.fsc_count || 0) + '개';
+
+  const maxCalmar = Math.max(...pts.map(p=>p.calmar||0));
+  const minDd     = Math.min(...pts.map(p=>p.x||0));
+  document.getElementById('sum-calmar').textContent  = maxCalmar.toFixed(3);
+  document.getElementById('sum-dd').textContent      = minDd.toFixed(1) + '%';
+
+  // Group by tier for separate traces (allows legend grouping)
+  const tierGroups = { T1:[], T2:[], T3:[], T4:[] };
+  const tierColors = { T1:'#10b981', T2:'#3b82f6', T3:'#f59e0b', T4:'#ef4444' };
+  const tierLabels = { T1:'안심형 T1', T2:'균형형 T2', T3:'성장형 T3', T4:'적극형 T4' };
+
+  for (const p of pts) {
+    if (tierGroups[p.tier]) tierGroups[p.tier].push(p);
+  }
+
+  const traces = [];
+  for (const [tier, tpts] of Object.entries(tierGroups)) {
+    if (!tpts.length) continue;
+    traces.push({
+      name:   tierLabels[tier],
+      x:      tpts.map(p=>p.x),
+      y:      tpts.map(p=>p.y),
+      mode:   'markers',
+      type:   'scatter',
+      marker: {
+        size:     tpts.map(p=>p.size),
+        color:    tpts.map(p=>p.fsc ? tierColors[tier] : tierColors[tier]),
+        opacity:  tpts.map(p=>p.fsc ? 0.95 : 0.6),
+        line: {
+          color: tpts.map(p=>p.fsc ? '#ffffff' : 'transparent'),
+          width: tpts.map(p=>p.fsc ? 2 : 0),
+        },
+        sizemode: 'diameter',
+      },
+      customdata: tpts.map(p=>[
+        p.label, p.tier_label, p.calmar, p.sharpe, p.bond_pct, p.fsc, p.run_id
+      ]),
+      hovertemplate:
+        '<b>%{customdata[0]}</b><br>' +
+        '위험등급: %{customdata[1]}<br>' +
+        'CAGR: %{y:.1f}%<br>' +
+        'MaxDD: %{x:.1f}%<br>' +
+        'Calmar: %{customdata[2]:.3f}<br>' +
+        'Sharpe: %{customdata[3]:.3f}<br>' +
+        '채권비중: %{customdata[4]}%<br>' +
+        'FSC: %{customdata[5]}<extra></extra>',
+    });
+  }
+
+  // Benchmark reference lines (shapes)
+  const shapes = [
+    // Horizontal CAGR guidelines
+    { type:'line', x0:-45, x1:0, y0:7,  y1:7,  line:{color:'#10b981',width:1,dash:'dot'} },
+    { type:'line', x0:-45, x1:0, y0:15, y1:15, line:{color:'#3b82f6',width:1,dash:'dot'} },
+    { type:'line', x0:-45, x1:0, y0:25, y1:25, line:{color:'#f59e0b',width:1,dash:'dot'} },
+    { type:'line', x0:-45, x1:0, y0:35, y1:35, line:{color:'#ef4444',width:1,dash:'dot'} },
+    // Vertical MaxDD guidelines
+    { type:'line', x0:-10, x1:-10, y0:0, y1:50, line:{color:'#10b981',width:1,dash:'dot'} },
+    { type:'line', x0:-18, x1:-18, y0:0, y1:50, line:{color:'#3b82f6',width:1,dash:'dot'} },
+    { type:'line', x0:-25, x1:-25, y0:0, y1:50, line:{color:'#f59e0b',width:1,dash:'dot'} },
+  ];
+
+  const annotations = [
+    { x:-1,  y:7.5,  text:'안심형 7%', showarrow:false, font:{color:'#10b981',size:10}, xanchor:'right' },
+    { x:-1,  y:15.5, text:'균형형 15%', showarrow:false, font:{color:'#3b82f6',size:10}, xanchor:'right' },
+    { x:-1,  y:25.5, text:'성장형 25%', showarrow:false, font:{color:'#f59e0b',size:10}, xanchor:'right' },
+    { x:-1,  y:35.5, text:'적극형 35%', showarrow:false, font:{color:'#ef4444',size:10}, xanchor:'right' },
+  ];
+
+  const layout = {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor:  '#1e293b',
+    margin: { t:20, b:60, l:65, r:20 },
+    xaxis: {
+      title: { text:'최대낙폭 (%)', font:{color:'#94a3b8'} },
+      color: '#94a3b8',
+      gridcolor: '#334155',
+      zeroline: false,
+      range: [-42, 0],
+      tickformat: '.0f',
+      ticksuffix: '%',
+    },
+    yaxis: {
+      title: { text:'연환산수익률 (%)', font:{color:'#94a3b8'} },
+      color: '#94a3b8',
+      gridcolor: '#334155',
+      zeroline: false,
+      range: [-5, 55],
+      tickformat: '.0f',
+      ticksuffix: '%',
+    },
+    legend: {
+      bgcolor: 'rgba(30,41,59,0.9)',
+      bordercolor: '#475569',
+      borderwidth: 1,
+      font: { color: '#f8fafc', size: 11 },
+    },
+    font: { color: '#f8fafc', size: 11 },
+    shapes,
+    annotations,
+    hovermode: 'closest',
+  };
+
+  Plotly.newPlot('scatter-plot', traces, layout, { responsive:true, displayModeBar:true });
+
+  // Click → open registry modal via navigation
+  document.getElementById('scatter-plot').on('plotly_click', function(evtData) {
+    const pt = evtData.points[0];
+    if (pt && pt.customdata) {
+      const runId = pt.customdata[6];
+      window.location.href = `/registry#run-${runId}`;
+    }
+  });
+}
+
+loadAndRender();
+</script>
+</body>
+</html>

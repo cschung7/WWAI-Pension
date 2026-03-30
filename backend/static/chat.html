@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>WWAI 연금 어드바이저</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+/* ── Reset & base ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b1120;--surface:#141c2e;--surface2:#1e2a3d;--surface3:#263146;
+  --primary:#3b82f6;--primary-d:#1d4ed8;--primary-l:#60a5fa;
+  --success:#10b981;--warn:#f59e0b;--danger:#ef4444;--purple:#8b5cf6;--teal:#14b8a6;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
+  --border:#1e2d45;--border2:#263146;--radius:14px;--shadow:0 4px 24px rgba(0,0,0,.4);
+  --sidebar-w:260px;--steps-w:300px;--header-h:56px;
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Pretendard','Inter',sans-serif;display:flex;flex-direction:column}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px}
+
+/* ── Header ── */
+.header{height:var(--header-h);background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0;z-index:30}
+.header-left{display:flex;align-items:center;gap:10px}
+.mobile-menu-btn{background:none;border:none;color:var(--text2);cursor:pointer;padding:6px;border-radius:8px;display:none}
+.mobile-menu-btn:hover{background:var(--surface2);color:var(--text)}
+.logo{width:34px;height:34px;background:linear-gradient(135deg,#1d4ed8,#7c3aed);border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#fff;flex-shrink:0}
+.header-title{font-size:16px;font-weight:700;color:var(--text)}
+.header-sub{font-size:11px;color:var(--text2);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:8px}
+.header-link{font-size:12px;color:var(--text2);text-decoration:none;padding:5px 10px;border:1px solid var(--border2);
+  border-radius:8px;display:flex;align-items:center;gap:5px;transition:all .15s}
+.header-link:hover{border-color:var(--primary-l);color:var(--primary-l)}
+.status-badge{font-size:11px;padding:3px 10px;border-radius:99px;background:rgba(16,185,129,.12);
+  color:var(--success);border:1px solid rgba(16,185,129,.2);white-space:nowrap}
+.status-badge.thinking{background:rgba(59,130,246,.12);color:var(--primary-l);border-color:rgba(59,130,246,.2)}
+
+/* ── Layout ── */
+.main-layout{display:flex;flex:1;overflow:hidden;position:relative}
+
+/* ── Sidebar ── */
+.sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0;transition:transform .25s;z-index:20}
+.sidebar-overlay{display:none}
+.new-chat-btn{margin:12px;padding:9px 14px;background:var(--primary);color:#fff;border:none;
+  border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;
+  gap:7px;transition:background .15s;flex-shrink:0}
+.new-chat-btn:hover{background:var(--primary-d)}
+.conv-search-box{margin:0 12px 8px;position:relative;flex-shrink:0}
+.conv-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none}
+.conv-search-box input{width:100%;background:var(--surface2);border:1px solid var(--border2);color:var(--text);
+  border-radius:8px;padding:7px 10px 7px 30px;font-size:13px;outline:none}
+.conv-search-box input:focus{border-color:var(--primary)}
+.conv-list{flex:1;overflow-y:auto;padding:0 6px 12px}
+.conv-section-label{font-size:11px;color:var(--text3);font-weight:600;padding:8px 8px 4px;letter-spacing:.05em}
+.conv-item{padding:10px 10px;border-radius:9px;cursor:pointer;display:flex;align-items:center;
+  justify-content:space-between;gap:6px;margin-bottom:2px;transition:background .12s}
+.conv-item:hover{background:var(--surface2)}.conv-item.active{background:var(--surface3)}
+.conv-item-title{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;color:var(--text)}
+.conv-item-date{font-size:11px;color:var(--text3);white-space:nowrap}
+.conv-item-delete{background:none;border:none;color:var(--text3);cursor:pointer;padding:2px;
+  border-radius:4px;opacity:0;transition:opacity .12s;flex-shrink:0}
+.conv-item:hover .conv-item-delete{opacity:1}.conv-item-delete:hover{color:var(--danger)}
+
+/* ── Chat panel ── */
+.chat-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.messages{flex:1;overflow-y:auto;padding:20px 16px;display:flex;flex-direction:column;gap:16px}
+
+/* ── Welcome screen ── */
+.welcome-msg{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:40px 20px;max-width:620px;margin:auto;gap:12px}
+.welcome-logo{width:64px;height:64px;background:linear-gradient(135deg,#1d4ed8,#7c3aed);border-radius:20px;
+  display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;margin-bottom:4px}
+.welcome-msg h2{font-size:26px;font-weight:700;color:var(--text)}
+.welcome-msg > p{font-size:15px;color:var(--text2);line-height:1.6;max-width:480px}
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-top:8px}
+.quick-card{background:var(--surface2);border:1px solid var(--border2);border-radius:12px;
+  padding:14px 16px;cursor:pointer;text-align:left;transition:all .15s;display:flex;flex-direction:column;gap:5px}
+.quick-card:hover{border-color:var(--primary-l);background:rgba(59,130,246,.07)}
+.quick-card-icon{font-size:20px}
+.quick-card-title{font-size:13px;font-weight:600;color:var(--text)}
+.quick-card-sub{font-size:12px;color:var(--text2);line-height:1.4}
+.welcome-nav-links{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+.welcome-nav-link{font-size:12px;color:var(--text2);text-decoration:none;padding:6px 14px;
+  border:1px solid var(--border2);border-radius:8px;transition:all .15s;display:flex;align-items:center;gap:5px}
+.welcome-nav-link:hover{border-color:var(--primary-l);color:var(--primary-l)}
+
+/* ── Messages ── */
+.msg{display:flex;flex-direction:column;max-width:680px;gap:4px;position:relative}
+.msg.user{align-self:flex-end;align-items:flex-end}
+.msg.assistant{align-self:flex-start}
+.msg-content{padding:12px 16px;border-radius:14px;line-height:1.65;font-size:14.5px;word-break:break-word}
+.msg.user .msg-content{background:var(--primary-d);color:#fff;border-bottom-right-radius:4px}
+.msg.assistant .msg-content{background:var(--surface2);color:var(--text);border-bottom-left-radius:4px;
+  border:1px solid var(--border2)}
+.msg.assistant .msg-content h1,.msg.assistant .msg-content h2,.msg.assistant .msg-content h3{
+  font-size:1em;font-weight:700;margin:10px 0 4px;color:var(--text)}
+.msg.assistant .msg-content p{margin-bottom:8px}
+.msg.assistant .msg-content p:last-child{margin-bottom:0}
+.msg.assistant .msg-content ul,.msg.assistant .msg-content ol{padding-left:18px;margin-bottom:8px}
+.msg.assistant .msg-content li{margin-bottom:3px}
+.msg.assistant .msg-content code{background:var(--surface3);padding:2px 6px;border-radius:4px;
+  font-family:'JetBrains Mono',monospace;font-size:13px}
+.msg.assistant .msg-content pre{background:var(--surface3);padding:12px;border-radius:8px;overflow-x:auto;margin:8px 0}
+.msg.assistant .msg-content pre code{background:none;padding:0}
+.msg.assistant .msg-content table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
+.msg.assistant .msg-content th{background:var(--surface3);padding:7px 10px;text-align:left;border:1px solid var(--border2)}
+.msg.assistant .msg-content td{padding:6px 10px;border:1px solid var(--border2)}
+.msg.assistant .msg-content strong{color:var(--primary-l);font-weight:600}
+.msg-copy-btn{background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;
+  border-radius:5px;margin-top:3px;align-self:flex-start;opacity:0;transition:opacity .15s}
+.msg.assistant:hover .msg-copy-btn{opacity:1}.msg-copy-btn:hover{color:var(--text)}
+
+/* ── Thinking dots ── */
+.thinking-dot{display:flex;gap:5px;padding:14px 18px}
+.thinking-dot span{width:8px;height:8px;border-radius:50%;background:var(--text3);
+  animation:bounce .9s infinite;display:block}
+.thinking-dot span:nth-child(2){animation-delay:.15s}
+.thinking-dot span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,80%,100%{transform:scale(.8);opacity:.5}40%{transform:scale(1.2);opacity:1}}
+
+/* ── Streaming token rendering ── */
+.msg-stream .msg-content{border-color:rgba(59,130,246,.3)}
+
+/* ── Input area ── */
+.input-area{padding:12px 16px 16px;border-top:1px solid var(--border);background:var(--bg);flex-shrink:0}
+.input-wrapper{display:flex;gap:8px;align-items:flex-end;background:var(--surface2);
+  border:1px solid var(--border2);border-radius:14px;padding:10px 12px;transition:border-color .2s}
+.input-wrapper:focus-within{border-color:var(--primary)}
+textarea{flex:1;background:transparent;border:none;color:var(--text);resize:none;
+  font-size:14.5px;line-height:1.55;font-family:inherit;outline:none;max-height:120px;min-height:22px}
+textarea::placeholder{color:var(--text3)}
+.send-btn{background:var(--primary);color:#fff;border:none;border-radius:9px;
+  width:36px;height:36px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:background .15s;align-self:flex-end}
+.send-btn:hover:not(:disabled){background:var(--primary-d)}
+.send-btn:disabled{background:var(--surface3);cursor:not-allowed}
+.input-hint{font-size:11px;color:var(--text3);margin-top:6px;text-align:center}
+
+/* ── Steps panel ── */
+.steps-panel{width:var(--steps-w);background:var(--surface);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;transition:width .25s,transform .25s;flex-shrink:0}
+.steps-panel.collapsed{width:0;overflow:hidden}
+.steps-header{padding:14px 14px 10px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;justify-content:space-between;flex-shrink:0}
+.steps-header h3{font-size:13px;font-weight:600;color:var(--text2)}
+.steps-toggle{background:none;border:none;color:var(--text3);cursor:pointer;padding:3px;border-radius:5px}
+.steps-toggle:hover{color:var(--text)}
+.steps-content{flex:1;overflow-y:auto;padding:10px}
+.steps-empty{font-size:12px;color:var(--text3);text-align:center;padding:20px 0}
+.step-item{padding:10px 12px;border-radius:9px;margin-bottom:6px;font-size:12px;line-height:1.5}
+.step-item.plan,.step-item.answer{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.15)}
+.step-item.running{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.15)}
+.step-item.done{background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.12)}
+.step-item.failed{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.15)}
+.step-label{display:flex;align-items:center;gap:7px;font-weight:600;color:var(--text)}
+.step-icon{font-size:14px;flex-shrink:0}
+.step-detail{color:var(--text2);margin-top:5px;word-break:break-all;font-size:11.5px}
+
+/* ── Tier badge ── */
+.tier-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;
+  padding:2px 8px;border-radius:99px}
+.tier-T1{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+.tier-T2{background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.25)}
+.tier-T3{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.25)}
+.tier-T4{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.25)}
+
+/* ── Mobile ── */
+@media (max-width: 900px) {
+  .steps-panel{display:none}
+  .mobile-menu-btn{display:flex}
+  .sidebar{position:fixed;top:0;left:0;height:100%;transform:translateX(-100%);z-index:50}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-overlay{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40;
+    opacity:0;pointer-events:none;transition:opacity .25s}
+  .sidebar-overlay.active{opacity:1;pointer-events:all}
+  .quick-grid{grid-template-columns:1fr}
+}
+@media (max-width: 600px) {
+  .header-link{display:none}
+  .welcome-nav-links .welcome-nav-link{font-size:11px;padding:5px 10px}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="header-left">
+    <button class="mobile-menu-btn" onclick="toggleSidebar()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <div class="logo">P</div>
+    <div>
+      <div class="header-title">WWAI 연금 어드바이저</div>
+      <div class="header-sub">IRP/DC 연금 투자 AI 상담</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <a class="header-link" href="/fund-buyer-profile">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      내 프로필 진단
+    </a>
+    <a class="header-link" href="/registry">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      전략 레지스트리
+    </a>
+    <span class="status-badge" id="status-badge">준비</span>
+  </div>
+</header>
+
+<!-- ── Sidebar overlay ── -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<!-- ── Main layout ── -->
+<div class="main-layout">
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar" id="sidebar">
+    <button class="new-chat-btn" onclick="newChat()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      새 상담 시작
+    </button>
+    <div class="conv-search-box">
+      <svg class="conv-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="conv-search" placeholder="상담 내역 검색..." oninput="onSearchInput(this.value)"/>
+    </div>
+    <div class="conv-list" id="conv-list"></div>
+  </div>
+
+  <!-- ── Chat panel ── -->
+  <div class="chat-panel">
+    <div class="messages" id="messages">
+      <div class="welcome-msg" id="welcome">
+        <div class="welcome-logo">P</div>
+        <h2>연금 투자 무엇이든 물어보세요</h2>
+        <p>IRP·DC 운용 전략부터 ETF 선택, FSC 규정까지<br>AI 어드바이저가 실시간 레지스트리 데이터로 답합니다.</p>
+        <div class="quick-grid">
+          <button class="quick-card" onclick="sendQuick('나에게 맞는 연금 전략 티어를 알려줘')">
+            <div class="quick-card-icon">🎯</div>
+            <div class="quick-card-title">내 티어 알아보기</div>
+            <div class="quick-card-sub">T1 안심형 ~ T4 적극형 중 어디에 속하나요?</div>
+          </button>
+          <button class="quick-card" onclick="sendQuick('IRP에 넣을 수 있는 단일 ETF 추천해줘. 채권도 따로 살 수 있어')">
+            <div class="quick-card-icon">📦</div>
+            <div class="quick-card-title">단일 ETF 추천</div>
+            <div class="quick-card-sub">ETF 하나로 IRP 규정 충족하는 방법</div>
+          </button>
+          <button class="quick-card" onclick="sendQuick('현재 레지스트리에서 가장 안전한 연금 전략 3개 비교해줘')">
+            <div class="quick-card-icon">🛡️</div>
+            <div class="quick-card-title">안전 전략 비교</div>
+            <div class="quick-card-sub">MaxDD가 낮고 안정적인 T1 전략 찾기</div>
+          </button>
+          <button class="quick-card" onclick="sendQuick('IRP 연금과 DC 퇴직연금의 위험자산 70% 규정 설명해줘')">
+            <div class="quick-card-icon">⚖️</div>
+            <div class="quick-card-title">FSC 규정 이해</div>
+            <div class="quick-card-sub">위험자산 70% 제한이 뭔지, 어떻게 지키나요?</div>
+          </button>
+          <button class="quick-card" onclick="sendQuick('은퇴까지 15년 남았는데 어떤 연금 전략이 좋을까요? 공격적으로 투자하고 싶어요')">
+            <div class="quick-card-icon">⏳</div>
+            <div class="quick-card-title">은퇴 시기별 전략</div>
+            <div class="quick-card-sub">남은 기간에 따른 최적 글라이드 패스</div>
+          </button>
+          <button class="quick-card" onclick="sendQuick('포트폴리오형과 단일ETF 혼합형 연금 전략의 차이가 뭐야?')">
+            <div class="quick-card-icon">🔄</div>
+            <div class="quick-card-title">상품 유형 비교</div>
+            <div class="quick-card-sub">포트폴리오형 vs 단일ETF 혼합형 vs 자체충족형</div>
+          </button>
+        </div>
+        <div class="welcome-nav-links">
+          <a class="welcome-nav-link" href="/fund-buyer-profile">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            상세 프로필 진단 (4단계)
+          </a>
+          <a class="welcome-nav-link" href="/registry">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            전략 레지스트리 전체 보기
+          </a>
+          <a class="welcome-nav-link" href="/frontier">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            효율적 프론티어
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Input ── -->
+    <div class="input-area">
+      <div class="input-wrapper">
+        <textarea id="input" placeholder="연금·IRP·ETF에 대해 무엇이든 물어보세요..." rows="1" autofocus></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+      <p class="input-hint">Enter로 전송 · Shift+Enter로 줄바꿈 · 이 대화는 투자 조언이 아닌 정보 제공 목적입니다</p>
+    </div>
+  </div>
+
+  <!-- ── Steps panel ── -->
+  <div class="steps-panel" id="steps-panel">
+    <div class="steps-header">
+      <h3>어드바이저 처리 단계</h3>
+      <button class="steps-toggle" onclick="stepsPanel.classList.toggle('collapsed')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+    <div class="steps-content" id="steps-content">
+      <p class="steps-empty">질문을 입력하면 처리 단계가 여기에 표시됩니다.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ── State ── */
+const API = '';
+let isStreaming = false;
+let convId = null;
+
+/* ── DOM refs ── */
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('send-btn');
+const statusBadge = document.getElementById('status-badge');
+const stepsContent = document.getElementById('steps-content');
+const stepsPanel = document.getElementById('steps-panel');
+const convListEl = document.getElementById('conv-list');
+const sidebarEl = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+/* ── Sidebar ── */
+function toggleSidebar() {
+  sidebarEl.classList.toggle('open');
+  sidebarOverlay.classList.toggle('active');
+}
+function closeSidebar() {
+  sidebarEl.classList.remove('open');
+  sidebarOverlay.classList.remove('active');
+}
+
+/* ── Input auto-resize ── */
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+});
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+function sendQuick(text) { inputEl.value = text; sendMessage(); }
+
+/* ── Message rendering ── */
+function esc(t) {
+  const d = document.createElement('div');
+  d.textContent = t;
+  return d.innerHTML;
+}
+function md(text) {
+  if (!text) return '';
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true });
+    const r = new marked.Renderer();
+    r.link = ({ href, title, text }) =>
+      `<a href="${href}"${title ? ` title="${title}"` : ''} target="_blank" rel="noopener">${text}</a>`;
+    return marked.parse(text, { renderer: r });
+  }
+  return '<p>' + esc(text).replace(/\n/g, '<br>') + '</p>';
+}
+
+function welcomeEl() { return document.getElementById('welcome'); }
+
+function addMsg(role, content, streaming = false) {
+  const w = welcomeEl(); if (w) w.remove();
+  const div = document.createElement('div');
+  div.className = 'msg ' + role + (streaming ? ' msg-stream' : '');
+  div.dataset.role = role;
+  div.dataset.raw = content;
+  const rendered = role === 'user' ? esc(content) : md(content);
+  const copyBtn = role === 'assistant'
+    ? `<button class="msg-copy-btn" onclick="copyMsg(this)" title="복사">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+       </button>` : '';
+  div.innerHTML = `<div class="msg-content">${rendered}</div>${copyBtn}`;
+  messagesEl.appendChild(div);
+  scrollBottom();
+  return div;
+}
+
+function addThinking() {
+  const d = document.createElement('div');
+  d.className = 'msg assistant'; d.id = 'thinking';
+  d.innerHTML = '<div class="msg-content" style="padding:12px 16px"><div class="thinking-dot"><span></span><span></span><span></span></div></div>';
+  messagesEl.appendChild(d); scrollBottom();
+}
+function removeThinking() { const e = document.getElementById('thinking'); if (e) e.remove(); }
+function scrollBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+
+/* ── Steps panel ── */
+function clearSteps() { stepsContent.innerHTML = ''; }
+function addStep(type, label, detail) {
+  const d = document.createElement('div');
+  d.className = 'step-item ' + type;
+  const icons = { llm:'🤖', registry:'📊', answer:'✅', error:'❌', stream:'💬' };
+  d.innerHTML = `<div class="step-label"><span class="step-icon">${icons[type]||'•'}</span>${esc(label)}</div>
+    ${detail ? `<div class="step-detail">${esc(detail)}</div>` : ''}`;
+  stepsContent.appendChild(d);
+  stepsContent.scrollTop = stepsContent.scrollHeight;
+}
+
+/* ── Copy ── */
+function copyMsg(btn) {
+  const raw = btn.closest('.msg')?.dataset.raw || '';
+  navigator.clipboard.writeText(raw).then(() => {
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    setTimeout(() => {
+      btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+    }, 1400);
+  });
+}
+
+/* ── Send message with streaming ── */
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text || isStreaming) return;
+
+  isStreaming = true;
+  sendBtn.disabled = true;
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  statusBadge.textContent = '분석 중...';
+  statusBadge.className = 'status-badge thinking';
+
+  addMsg('user', text);
+  addThinking();
+  clearSteps();
+  addStep('llm', '레지스트리 컨텍스트 로딩 중...');
+
+  // Create streaming assistant message bubble
+  let streamDiv = null;
+  let streamContent = null;
+  let fullText = '';
+
+  try {
+    const res = await fetch(`${API}/api/pension/chat/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, conversation_id: convId }),
+    });
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const raw = line.slice(5).trim();
+        if (!raw) continue;
+        try {
+          const ev = JSON.parse(raw);
+          if (ev.type === 'start' || (ev.conversation_id && !ev.text)) {
+            if (ev.conversation_id) convId = ev.conversation_id;
+            removeThinking();
+            addStep('llm', 'LLM 스트리밍 시작');
+            // Create streaming bubble
+            streamDiv = document.createElement('div');
+            streamDiv.className = 'msg assistant msg-stream';
+            streamDiv.dataset.role = 'assistant';
+            streamDiv.dataset.raw = '';
+            streamDiv.innerHTML = '<div class="msg-content"></div><button class="msg-copy-btn" onclick="copyMsg(this)" title="복사"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>';
+            messagesEl.appendChild(streamDiv);
+            streamContent = streamDiv.querySelector('.msg-content');
+          } else if (ev.text !== undefined) {
+            fullText += ev.text;
+            if (streamContent) {
+              streamContent.innerHTML = md(fullText);
+              streamDiv.dataset.raw = fullText;
+              scrollBottom();
+            }
+          } else if (ev.type === 'done') {
+            if (ev.conversation_id) convId = ev.conversation_id;
+            if (streamDiv) streamDiv.classList.remove('msg-stream');
+            addStep('answer', '답변 완료');
+            loadConversations();
+          } else if (ev.type === 'error') {
+            removeThinking();
+            if (streamDiv) streamDiv.remove();
+            addMsg('assistant', `오류가 발생했습니다: ${ev.text || '알 수 없는 오류'}`);
+            addStep('error', '오류', ev.text);
+          }
+        } catch { /* skip malformed */ }
+      }
+    }
+
+    removeThinking();
+    if (!fullText && streamDiv) {
+      streamDiv.remove();
+      addMsg('assistant', '응답을 받지 못했습니다. 다시 시도해주세요.');
+    }
+
+  } catch (err) {
+    removeThinking();
+    if (streamDiv) streamDiv.remove();
+    addMsg('assistant', `연결 오류: ${err.message}\n\n잠시 후 다시 시도해주세요.`);
+    addStep('error', '연결 실패', err.message);
+  } finally {
+    isStreaming = false;
+    sendBtn.disabled = false;
+    statusBadge.textContent = '준비';
+    statusBadge.className = 'status-badge';
+    inputEl.focus();
+  }
+}
+
+/* ── Conversation list ── */
+function fmtDate(ts) {
+  if (!ts) return '';
+  const d = new Date(typeof ts === 'number' ? ts * 1000 : ts + (String(ts).endsWith('Z') ? '' : 'Z'));
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return '방금';
+  if (diff < 3600) return `${Math.floor(diff/60)}분 전`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}시간 전`;
+  return d.toLocaleDateString('ko-KR', { month:'short', day:'numeric' });
+}
+
+async function loadConversations(q) {
+  try {
+    const qs = q ? `?q=${encodeURIComponent(q)}` : '';
+    const res = await fetch(`${API}/api/pension/chat/conversations${qs}`);
+    const list = await res.json();
+    convListEl.innerHTML = '';
+    if (!list.length) {
+      convListEl.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0">상담 내역이 없습니다</div>';
+      return;
+    }
+    list.forEach(c => {
+      const div = document.createElement('div');
+      div.className = 'conv-item' + (c.id === convId ? ' active' : '');
+      div.onclick = () => selectConv(c.id);
+      div.innerHTML = `
+        <div style="flex:1;min-width:0">
+          <div class="conv-item-title">${esc(c.title || '대화')}</div>
+          <div class="conv-item-date">${fmtDate(c.updated_at)}</div>
+        </div>
+        <button class="conv-item-delete" onclick="event.stopPropagation();deleteConv('${c.id}')" title="삭제">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        </button>`;
+      convListEl.appendChild(div);
+    });
+  } catch { /* non-critical */ }
+}
+
+async function selectConv(id) {
+  if (isStreaming) return;
+  convId = id;
+  closeSidebar();
+  messagesEl.innerHTML = '';
+  clearSteps();
+  document.querySelectorAll('.conv-item').forEach(e => e.classList.remove('active'));
+  try {
+    const res = await fetch(`${API}/api/pension/chat/conversations/${id}/messages`);
+    const msgs = await res.json();
+    msgs.forEach(m => addMsg(m.role, m.content));
+  } catch { addMsg('assistant', '대화를 불러오는데 실패했습니다.'); }
+  loadConversations();
+}
+
+function welcomeHTML() {
+  return `
+    <div class="welcome-logo">P</div>
+    <h2>연금 투자 무엇이든 물어보세요</h2>
+    <p>IRP·DC 운용 전략부터 ETF 선택, FSC 규정까지<br>AI 어드바이저가 실시간 레지스트리 데이터로 답합니다.</p>
+    <div class="quick-grid">
+      <button class="quick-card" onclick="sendQuick('나에게 맞는 연금 전략 티어를 알려줘')">
+        <div class="quick-card-icon">🎯</div>
+        <div class="quick-card-title">내 티어 알아보기</div>
+        <div class="quick-card-sub">T1 안심형 ~ T4 적극형 중 어디에 속하나요?</div>
+      </button>
+      <button class="quick-card" onclick="sendQuick('IRP에 넣을 수 있는 단일 ETF 추천해줘. 채권도 따로 살 수 있어')">
+        <div class="quick-card-icon">📦</div>
+        <div class="quick-card-title">단일 ETF 추천</div>
+        <div class="quick-card-sub">ETF 하나로 IRP 규정 충족하는 방법</div>
+      </button>
+      <button class="quick-card" onclick="sendQuick('현재 레지스트리에서 가장 안전한 연금 전략 3개 비교해줘')">
+        <div class="quick-card-icon">🛡️</div>
+        <div class="quick-card-title">안전 전략 비교</div>
+        <div class="quick-card-sub">MaxDD가 낮고 안정적인 T1 전략 찾기</div>
+      </button>
+      <button class="quick-card" onclick="sendQuick('IRP 연금과 DC 퇴직연금의 위험자산 70% 규정 설명해줘')">
+        <div class="quick-card-icon">⚖️</div>
+        <div class="quick-card-title">FSC 규정 이해</div>
+        <div class="quick-card-sub">위험자산 70% 제한이 뭔지, 어떻게 지키나요?</div>
+      </button>
+      <button class="quick-card" onclick="sendQuick('은퇴까지 15년 남았는데 어떤 연금 전략이 좋을까요? 공격적으로 투자하고 싶어요')">
+        <div class="quick-card-icon">⏳</div>
+        <div class="quick-card-title">은퇴 시기별 전략</div>
+        <div class="quick-card-sub">남은 기간에 따른 최적 글라이드 패스</div>
+      </button>
+      <button class="quick-card" onclick="sendQuick('포트폴리오형과 단일ETF 혼합형 연금 전략의 차이가 뭐야?')">
+        <div class="quick-card-icon">🔄</div>
+        <div class="quick-card-title">상품 유형 비교</div>
+        <div class="quick-card-sub">포트폴리오형 vs 단일ETF 혼합형 vs 자체충족형</div>
+      </button>
+    </div>
+    <div class="welcome-nav-links">
+      <a class="welcome-nav-link" href="/fund-buyer-profile">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        상세 프로필 진단 (4단계)
+      </a>
+      <a class="welcome-nav-link" href="/registry">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        전략 레지스트리 전체 보기
+      </a>
+      <a class="welcome-nav-link" href="/frontier">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        효율적 프론티어
+      </a>
+    </div>`;
+}
+
+function newChat() {
+  if (isStreaming) return;
+  convId = null;
+  closeSidebar();
+  messagesEl.innerHTML = '';
+  document.querySelectorAll('.conv-item').forEach(e => e.classList.remove('active'));
+  clearSteps();
+  const w = document.createElement('div');
+  w.id = 'welcome';
+  w.className = 'welcome-msg';
+  w.innerHTML = welcomeHTML();
+  messagesEl.appendChild(w);
+  inputEl.focus();
+}
+
+async function deleteConv(id) {
+  if (!confirm('이 상담 내역을 삭제하시겠습니까?')) return;
+  await fetch(`${API}/api/pension/chat/conversations/${id}`, { method: 'DELETE' }).catch(()=>{});
+  if (convId === id) newChat();
+  loadConversations();
+}
+
+/* ── Search ── */
+let searchTimer = null;
+function onSearchInput(v) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadConversations(v.trim()), 280);
+}
+
+/* ── Init ── */
+loadConversations();
+</script>
+</body>
+</html>

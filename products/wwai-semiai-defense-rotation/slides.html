@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WWAI 반도체↔방산 레짐전환 ETF — Pitch Deck</title>
+<style>
+  :root {
+    --bg:      #0f172a;
+    --bg2:     #1e293b;
+    --bg3:     #273549;
+    --border:  #334155;
+    --text:    #f1f5f9;
+    --muted:   #94a3b8;
+    --blue:    #3b82f6;
+    --green:   #10b981;
+    --red:     #ef4444;
+    --yellow:  #f59e0b;
+    --purple:  #a855f7;
+    --teal:    #14b8a6;
+    --gold:    #eab308;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Noto Sans KR', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ── Slide container ── */
+  .deck { width: 100%; height: 100vh; position: relative; }
+  .slide {
+    display: none;
+    width: 100%; height: 100vh;
+    padding: 48px 64px;
+    flex-direction: column;
+    justify-content: center;
+    background: var(--bg);
+    position: absolute; top: 0; left: 0;
+    animation: fadeIn 0.3s ease;
+  }
+  .slide.active { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* ── Nav ── */
+  .nav {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px;
+    background: rgba(30,41,59,0.95); border: 1px solid var(--border);
+    border-radius: 40px; padding: 10px 24px; z-index: 100;
+  }
+  .nav button {
+    background: none; border: none; color: var(--muted);
+    font-size: 18px; cursor: pointer; padding: 4px 8px;
+    border-radius: 6px; transition: all 0.15s;
+  }
+  .nav button:hover { color: var(--text); background: var(--bg3); }
+  .nav .counter { color: var(--muted); font-size: 13px; min-width: 60px; text-align: center; }
+  .dot-nav { display: flex; gap: 6px; align-items: center; }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--border); cursor: pointer; transition: all 0.15s;
+  }
+  .dot.active { background: var(--blue); width: 20px; border-radius: 4px; }
+
+  /* ── Top bar ── */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, var(--blue), var(--teal));
+    z-index: 100;
+  }
+
+  /* ── Typography ── */
+  .label {
+    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--blue); margin-bottom: 12px;
+  }
+  h1 { font-size: 52px; font-weight: 800; line-height: 1.1; }
+  h2 { font-size: 36px; font-weight: 700; margin-bottom: 24px; }
+  h3 { font-size: 22px; font-weight: 600; margin-bottom: 12px; }
+  .sub { font-size: 20px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+  .tag {
+    display: inline-block; padding: 4px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 600; margin: 3px;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 24px;
+  }
+  .card-grid { display: grid; gap: 16px; }
+  .card-grid.c2 { grid-template-columns: 1fr 1fr; }
+  .card-grid.c3 { grid-template-columns: 1fr 1fr 1fr; }
+  .card-grid.c4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+  /* ── Metric big ── */
+  .metric { text-align: center; }
+  .metric .val {
+    font-size: 42px; font-weight: 800;
+    background: linear-gradient(135deg, var(--blue), var(--teal));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .metric .val.green { background: linear-gradient(135deg, var(--green), var(--teal)); -webkit-background-clip: text; }
+  .metric .val.red   { background: none; -webkit-text-fill-color: var(--red); color: var(--red); }
+  .metric .val.gold  { background: linear-gradient(135deg, var(--gold), #f97316); -webkit-background-clip: text; }
+  .metric .lbl { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .metric .sub-val { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700;
+       text-transform: uppercase; letter-spacing: 1px; color: var(--muted);
+       border-bottom: 1px solid var(--border); }
+  td { padding: 11px 14px; border-bottom: 1px solid rgba(51,65,85,0.5); }
+  tr:last-child td { border-bottom: none; }
+  tr.highlight { background: rgba(59,130,246,0.08); }
+  tr.highlight td { color: var(--text); font-weight: 600; }
+  .up   { color: var(--green); font-weight: 600; }
+  .down { color: var(--red);   font-weight: 600; }
+  .neutral { color: var(--muted); }
+
+  /* ── Flow diagram ── */
+  .flow {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0; margin: 24px 0;
+  }
+  .flow-box {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 20px; text-align: center;
+    min-width: 140px;
+  }
+  .flow-arrow { color: var(--blue); font-size: 24px; padding: 0 8px; }
+  .flow-box .title { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .flow-box .val { font-size: 18px; font-weight: 700; }
+
+  /* ── Badge ── */
+  .badge { display: inline-flex; align-items: center; gap: 6px;
+           padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .badge.green { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+  .badge.red   { background: rgba(239,68,68,0.15);  color: var(--red);   border: 1px solid rgba(239,68,68,0.3); }
+  .badge.yellow{ background: rgba(245,158,11,0.15); color: var(--yellow);border: 1px solid rgba(245,158,11,0.3);}
+  .badge.blue  { background: rgba(59,130,246,0.15); color: var(--blue);  border: 1px solid rgba(59,130,246,0.3);}
+
+  /* ── Timeline ── */
+  .timeline { display: flex; gap: 0; margin-top: 20px; }
+  .tl-item { flex: 1; position: relative; padding: 0 0 0 20px; }
+  .tl-item::before {
+    content: ''; position: absolute; left: 0; top: 8px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--blue); border: 2px solid var(--bg);
+    z-index: 2;
+  }
+  .tl-item.done::before { background: var(--green); }
+  .tl-item.warn::before { background: var(--yellow); }
+  .tl-item::after {
+    content: ''; position: absolute; left: 11px; top: 14px;
+    width: calc(100% - 11px); height: 2px; background: var(--border);
+  }
+  .tl-item:last-child::after { display: none; }
+  .tl-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .tl-title { font-size: 14px; font-weight: 600; }
+  .tl-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Bar chart ── */
+  .bar-chart { display: flex; flex-direction: column; gap: 10px; }
+  .bar-row { display: flex; align-items: center; gap: 12px; }
+  .bar-row .name { width: 200px; font-size: 13px; color: var(--muted); text-align: right; flex-shrink: 0; }
+  .bar-bg { flex: 1; background: var(--bg3); border-radius: 4px; height: 22px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center;
+              padding: 0 8px; font-size: 12px; font-weight: 700; white-space: nowrap; transition: width 0.5s; }
+  .bar-row .val-label { width: 60px; font-size: 13px; font-weight: 600; }
+
+  /* ── Disclosure ── */
+  .disclosure {
+    position: fixed; bottom: 70px; left: 64px; right: 64px;
+    font-size: 10px; color: rgba(148,163,184,0.5);
+    border-top: 1px solid rgba(51,65,85,0.3);
+    padding-top: 6px; pointer-events: none;
+  }
+
+  /* ── Slide-specific ── */
+  .slide-cover { background: radial-gradient(ellipse at 30% 40%, rgba(59,130,246,0.12) 0%, transparent 60%),
+                              radial-gradient(ellipse at 70% 60%, rgba(20,184,166,0.08) 0%, transparent 60%), var(--bg); }
+  .logo-area { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+  .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--blue); }
+  .logo-text { font-size: 14px; font-weight: 700; letter-spacing: 1px; color: var(--blue); }
+
+  .regime-indicator {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 8px; padding: 6px 14px; margin-top: 16px;
+  }
+  .regime-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+                animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+</style>
+</head>
+<body>
+
+<div class="topbar"></div>
+
+<div class="deck">
+
+  <!-- ── SLIDE 1: COVER ── -->
+  <div class="slide slide-cover active" id="s1">
+    <div class="logo-area">
+      <div class="logo-dot"></div>
+      <div class="logo-text">WWAI · ETF Fabless Pipeline</div>
+    </div>
+    <div class="label">IRP/DC 연금 Active ETF Pitch</div>
+    <h1>반도체 ↔ 방산<br>레짐전환 전략</h1>
+    <p class="sub">강세장엔 반도체·AI, 약세장엔 방산·원자력으로 자동전환<br>
+    FSC 안전자산 30% 준수 · KRX 상장 ETF만으로 구성</p>
+    <div class="regime-indicator">
+      <div class="regime-dot"></div>
+      <span style="font-size:13px; color:var(--green); font-weight:600;">현재 레짐: BULL</span>
+      <span style="font-size:12px; color:var(--muted);">KODEX200 MA60 +4.85% · 2026-03-30</span>
+    </div>
+    <div style="margin-top:48px; display:flex; gap:32px;">
+      <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">CAGR (FSC)</div><div style="font-size:28px;font-weight:800;color:var(--green);">25.7%</div></div>
+      <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">최대낙폭</div><div style="font-size:28px;font-weight:800;color:var(--teal);">-15.9%</div></div>
+      <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Calmar</div><div style="font-size:28px;font-weight:800;color:var(--blue);">1.62</div></div>
+      <div><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">FSC IRP/DC</div><div style="font-size:28px;font-weight:800;color:var(--gold);">적합</div></div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 2: PROBLEM ── -->
+  <div class="slide" id="s2">
+    <div class="label">Problem</div>
+    <h2>IRP 투자자는 왜 손해를 보는가?</h2>
+    <div class="card-grid c3" style="margin-top:8px;">
+      <div class="card">
+        <div style="font-size:32px;margin-bottom:12px;">📉</div>
+        <h3>반도체 직접투자</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;">CAGR 18.6%지만<br>MaxDD <span style="color:var(--red);font-weight:700;">-35.6%</span><br>2022년 약세장 직격</p>
+      </div>
+      <div class="card">
+        <div style="font-size:32px;margin-bottom:12px;">🔒</div>
+        <h3>채권 헤지의 한계</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;">레짐게이트+채권 추가해도<br>DD <span style="color:var(--yellow);font-weight:700;">-28.4%</span><br>반도체 상관관계 0.95</p>
+      </div>
+      <div class="card">
+        <div style="font-size:32px;margin-bottom:12px;">❌</div>
+        <h3>FSC 규정 미충족</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;">주식형 100% 보유 시<br>IRP/DC <span style="color:var(--red);font-weight:700;">안전자산 30%</span><br>의무 위반</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:20px; border-color:rgba(59,130,246,0.3);">
+      <p style="font-size:16px; line-height:1.7;">
+        <strong style="color:var(--blue);">핵심 인사이트</strong>: 반도체끼리는 상관관계 0.95 — 채권 헤지는 섹터 리스크를 제거하지 못한다.<br>
+        진짜 해법은 <strong>역상관 섹터(방산·원자력)로의 완전전환</strong>이다.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 3: SOLUTION ── -->
+  <div class="slide" id="s3">
+    <div class="label">Solution</div>
+    <h2>ETF Fabless 3단계 증류</h2>
+    <div class="flow" style="margin:20px 0 16px;">
+      <div class="flow-box" style="border-color:var(--border);">
+        <div class="title">Mode 1</div>
+        <div class="val" style="color:var(--muted);">Discovery</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">반도체 15개 EW</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color:var(--yellow);">
+        <div class="title">Mode 2</div>
+        <div class="val" style="color:var(--yellow);">Enhancement</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">레짐게이트+채권</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color:var(--blue); background:rgba(59,130,246,0.08);">
+        <div class="title">Mode 3</div>
+        <div class="val" style="color:var(--blue);">Distillation</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">방산Teacher 학습</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color:var(--green); background:rgba(16,185,129,0.08);">
+        <div class="title">FSC 적합</div>
+        <div class="val" style="color:var(--green);">S3.5 + Bond</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">채권 30% 슬리브</div>
+      </div>
+    </div>
+    <div class="card-grid c2" style="gap:12px;">
+      <div class="card">
+        <h3 style="color:var(--blue); font-size:15px; margin-bottom:12px;">🟢 BULL 레짐</h3>
+        <p style="font-size:14px; color:var(--muted); line-height:1.7;">
+          KODEX200 ≥ MA60<br>
+          → <strong style="color:var(--text);">반도체/AI ETF top-12</strong><br>
+          &nbsp;&nbsp;&nbsp;21일 모멘텀 상위 선택<br>
+          → 채권 슬리브 30% 병행
+        </p>
+      </div>
+      <div class="card">
+        <h3 style="color:var(--red); font-size:15px; margin-bottom:12px;">🔴 BEAR 레짐</h3>
+        <p style="font-size:14px; color:var(--muted); line-height:1.7;">
+          KODEX200 &lt; MA60<br>
+          → <strong style="color:var(--text);">방산/원자력 ETF top-7</strong><br>
+          &nbsp;&nbsp;&nbsp;21일 모멘텀 상위 선택<br>
+          → 채권 슬리브 30% 병행
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 4: PERFORMANCE ── -->
+  <div class="slide" id="s4">
+    <div class="label">Performance</div>
+    <h2>파이프라인 성과 비교</h2>
+    <div style="overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>모델</th><th>CAGR</th><th>MaxDD</th><th>Calmar</th><th>Sharpe</th><th>회전율</th><th>FSC</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>M1 반도체 EW</td>
+            <td class="up">18.6%</td><td class="down">-35.6%</td>
+            <td class="neutral">0.52</td><td class="neutral">0.670</td><td>—</td><td><span class="badge red">❌</span></td>
+          </tr>
+          <tr>
+            <td>M2 레짐게이트+채권</td>
+            <td class="up">21.9%</td><td class="down">-28.4%</td>
+            <td class="neutral">0.77</td><td class="neutral">0.979</td><td>—</td><td><span class="badge red">❌</span></td>
+          </tr>
+          <tr>
+            <td>S4 MomRot (증류)</td>
+            <td class="up">41.0%</td><td class="down">-22.3%</td>
+            <td class="up">1.83</td><td class="up">1.477</td><td class="down">72.6%</td><td><span class="badge red">❌</span></td>
+          </tr>
+          <tr class="highlight">
+            <td><strong>S3.5+IB — Bond30%+Inertia ★</strong></td>
+            <td class="up">25.7%</td><td class="up">-15.9%</td>
+            <td class="up">1.62</td><td class="up">1.428</td><td class="up">42.1%</td><td><span class="badge green">✅</span></td>
+          </tr>
+          <tr>
+            <td style="color:var(--muted);">Teacher EW (방산/원자력)</td>
+            <td class="up">35.5%</td><td class="down">-17.1%</td>
+            <td class="up">2.08</td><td class="up">1.989</td><td class="up">2.5%</td><td><span class="badge red">❌</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:11px; color:var(--muted); margin-top:12px;">
+      * 백테스트 2022-01-01 ~ 2026-03-30 (4.2년). 시뮬레이션 결과이며 실제 운용 수익률이 아닙니다.
+    </p>
+  </div>
+
+  <!-- ── SLIDE 5: RECENT PERFORMANCE ── -->
+  <div class="slide" id="s5">
+    <div class="label">Recent Performance</div>
+    <h2>최근 1M / 3M / 6M 성과</h2>
+    <div class="card-grid c4" style="margin-bottom:20px;">
+      <div class="card metric">
+        <div class="val red">-12%</div>
+        <div class="lbl">1개월</div>
+        <div class="sub-val">KOSPI -10.6% (동반하락)</div>
+      </div>
+      <div class="card metric">
+        <div class="val" style="background:linear-gradient(135deg,var(--blue),var(--teal));-webkit-background-clip:text;">+48%</div>
+        <div class="lbl">3개월</div>
+        <div class="sub-val">반도체 상승 구간 참여</div>
+      </div>
+      <div class="card metric">
+        <div class="val gold">+98%</div>
+        <div class="lbl">6개월</div>
+        <div class="sub-val">반도체 싸이클 완전 참여</div>
+      </div>
+      <div class="card metric">
+        <div class="val green">-19%</div>
+        <div class="lbl">6M MaxDD</div>
+        <div class="sub-val">6개월 내 낙폭 관리</div>
+      </div>
+    </div>
+    <div class="card" style="border-color:rgba(245,158,11,0.3);">
+      <p style="font-size:14px; line-height:1.8; color:var(--muted);">
+        <strong style="color:var(--yellow);">1M -12% 해석:</strong>
+        현재 레짐은 BULL이나, 반도체 단기 조정 구간 (KODEX200 월간 -10.6%).
+        전략은 레짐 신호에 따라 반도체 보유 중 → 구간 단기 손실은 정상적 동작.
+        MA60 이탈 시 방산/원자력으로 자동전환 대기.
+      </p>
+    </div>
+    <div style="margin-top:16px;">
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="name">S4 MomRot (6M)</div>
+          <div class="bar-bg"><div class="bar-fill" style="width:70%; background:linear-gradient(90deg,var(--blue),var(--teal)); color:white;">+98%</div></div>
+        </div>
+        <div class="bar-row">
+          <div class="name">ACE AI반도체TOP3+ (6M)</div>
+          <div class="bar-bg"><div class="bar-fill" style="width:99%; background:var(--green); color:white;">+139%</div></div>
+        </div>
+        <div class="bar-row">
+          <div class="name">Teacher EW (6M)</div>
+          <div class="bar-bg"><div class="bar-fill" style="width:28%; background:var(--yellow); color:#000;">+40%</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 6: FSC COMPLIANCE ── -->
+  <div class="slide" id="s6">
+    <div class="label">Regulatory</div>
+    <h2>FSC IRP/DC 규제 적합성</h2>
+    <div class="card-grid c2" style="gap:16px;">
+      <div>
+        <table>
+          <thead><tr><th>규정 항목</th><th>기준</th><th>상태</th></tr></thead>
+          <tbody>
+            <tr><td>위험자산 한도</td><td>주식 ≤ 70%</td><td><span class="badge green">✅ Bond 30%</span></td></tr>
+            <tr><td>안전자산 의무</td><td>채권/MMF ≥ 30%</td><td><span class="badge green">✅ Bond 30%</span></td></tr>
+            <tr><td>레버리지 금지</td><td>2x/인버스 불가</td><td><span class="badge green">✅ 해당없음</span></td></tr>
+            <tr><td>백테스트 기간</td><td>최소 3년</td><td><span class="badge green">✅ 4.2년</span></td></tr>
+            <tr><td>단일 ETF 한도</td><td>≤ 40%</td><td><span class="badge green">✅ EW ~8%</span></td></tr>
+            <tr><td>최소 보유 종목</td><td>≥ 3개</td><td><span class="badge green">✅ 12~7개</span></td></tr>
+            <tr><td>코스콤 테스트베드</td><td>일임 출시 전</td><td><span class="badge yellow">⚠️ Phase 2</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div class="card" style="border-color:rgba(16,185,129,0.3);">
+          <h3 style="font-size:14px; color:var(--green); margin-bottom:8px;">Bond Sleeve 30% 효과</h3>
+          <p style="font-size:13px; color:var(--muted); line-height:1.7;">
+            equity 70% → S3.5 로테이션<br>
+            bond   30% → 단기채권/MMF ETF<br>
+            <br>
+            MaxDD: -22.3% → <strong style="color:var(--green);">-15.9%</strong> ✅<br>
+            Calmar: 1.833 → <strong style="color:var(--green);">1.618</strong><br>
+            CAGR: 41.0% → <strong style="color:var(--yellow);">25.7%</strong>
+          </p>
+        </div>
+        <div class="card" style="border-color:rgba(245,158,11,0.3);">
+          <h3 style="font-size:14px; color:var(--yellow); margin-bottom:8px;">회전율 개선: 72.6% → 42.1%</h3>
+          <p style="font-size:13px; color:var(--muted); line-height:1.7;">
+            top_k 완화: bull 8→12, bear 5→7<br>
+            NestedInertia(λ=0.40) 가중치 스무딩<br>
+            "최고 선택" → "최악 제외"로 전환<br>
+            rank churn 급감 → 비용 절감
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 7: UNIVERSE ── -->
+  <div class="slide" id="s7">
+    <div class="label">Universe</div>
+    <h2>투자 유니버스: KRX 상장 ETF만</h2>
+    <div class="card-grid c2" style="gap:16px;">
+      <div class="card">
+        <h3 style="color:var(--blue); font-size:15px; margin-bottom:14px;">🟢 Student (Bull 구간 보유)</h3>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">KODEX AI반도체</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">ACE AI반도체TOP3+</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">TIGER 반도체TOP10</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">TIGER 반도체</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">KODEX 반도체</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">HANARO K-반도체</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">KODEX AI핵심장비</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">SOL AI반도체소부장</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">TIGER 필라델피아반도체</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">KODEX 미국반도체</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">TIGER 글로벌AI플랫폼</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">ACE 테슬라밸류체인</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">TIGER 리튬&2차전지</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">KODEX 코스닥150</span>
+          <span class="tag" style="background:rgba(59,130,246,0.15); color:var(--blue);">TIGER 200 IT</span>
+        </div>
+        <p style="font-size:12px; color:var(--muted); margin-top:10px;">15개 ETF · top-12 by 21d momentum 선택</p>
+      </div>
+      <div class="card">
+        <h3 style="color:var(--red); font-size:15px; margin-bottom:14px;">🔴 Teacher (Bear 구간 보유)</h3>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">KODEX 방위산업</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">KODEX 한국조선해양</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">TIGER 200 중공업</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">ACE 원자력</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">KODEX 원자력</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">TIGER 원자력테마</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">KODEX 인프라</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15); color:var(--red);">HANARO 원자력</span>
+        </div>
+        <p style="font-size:12px; color:var(--muted); margin-top:10px;">8개 ETF · top-7 by 21d momentum 선택</p>
+        <div style="margin-top:14px; padding:10px 12px; background:rgba(239,68,68,0.05); border-radius:8px; border:1px solid rgba(239,68,68,0.2);">
+          <p style="font-size:12px; color:var(--muted);">Teacher 단독 성과: CAGR <strong style="color:var(--red);">35.5%</strong> · Calmar <strong style="color:var(--red);">2.08</strong> · SR <strong style="color:var(--red);">1.99</strong></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 8: WHY NOW ── -->
+  <div class="slide" id="s8">
+    <div class="label">Market Timing</div>
+    <h2>왜 지금인가?</h2>
+    <div class="card-grid c3" style="margin-bottom:16px;">
+      <div class="card">
+        <div style="font-size:28px; margin-bottom:12px;">🇰🇷</div>
+        <h3 style="font-size:15px;">FSC 2025 연금개혁</h3>
+        <p style="font-size:13px; color:var(--muted); line-height:1.7; margin-top:8px;">
+          IRP 내 규칙기반 로테이션 상품 공백.<br>
+          로보어드바이저 일임 서비스 2025-03 시작.<br>
+          <strong style="color:var(--text);">선점 기회 존재</strong>
+        </p>
+      </div>
+      <div class="card">
+        <div style="font-size:28px; margin-bottom:12px;">⚡</div>
+        <h3 style="font-size:15px;">레짐 신호 실증</h3>
+        <p style="font-size:13px; color:var(--muted); line-height:1.7; margin-top:8px;">
+          KOSPI 1M -10.6% 하락 구간에서<br>
+          방산/원자력 Teacher 1M <strong style="color:var(--green);">+3%</strong>.<br>
+          <strong style="color:var(--text);">전략의 실시간 작동 증거</strong>
+        </p>
+      </div>
+      <div class="card">
+        <div style="font-size:28px; margin-bottom:12px;">🚀</div>
+        <h3 style="font-size:15px;">6M 수익 +98%</h3>
+        <p style="font-size:13px; color:var(--muted); line-height:1.7; margin-top:8px;">
+          반도체 싸이클 완전 참여.<br>
+          6M MaxDD -19%로 DD 관리.<br>
+          <strong style="color:var(--text);">실적으로 전략 검증됨</strong>
+        </p>
+      </div>
+    </div>
+    <div class="card" style="border-color:rgba(59,130,246,0.3);">
+      <p style="font-size:14px; line-height:1.8; color:var(--muted);">
+        <strong style="color:var(--blue);">pension.wwai.app</strong> 프론티어에 즉시 노출 → 투자자 관심 모집 →
+        <strong style="color:var(--blue);">6개월 실이력</strong> 확보 →
+        코스콤 테스트베드 제출 → FSC 인가
+      </p>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 9: ROADMAP ── -->
+  <div class="slide" id="s9">
+    <div class="label">Roadmap</div>
+    <h2>상품화 로드맵</h2>
+    <div class="timeline" style="margin-top:32px; margin-bottom:32px;">
+      <div class="tl-item done">
+        <div class="tl-label" style="padding-top:20px;">2026-03 ✅</div>
+        <div class="tl-title">Phase 0</div>
+        <div class="tl-sub">백테스트 4.2년 완료<br>pension.wwai.app 공개</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-label" style="padding-top:20px;">2026-04~06</div>
+        <div class="tl-title">Phase 1</div>
+        <div class="tl-sub">페이퍼 포트폴리오<br>일별 NAV 추적 시작<br>S3.5+Bond 30% 적용</div>
+      </div>
+      <div class="tl-item warn">
+        <div class="tl-label" style="padding-top:20px;">2026-07~12</div>
+        <div class="tl-title">Phase 2</div>
+        <div class="tl-sub">코스콤 테스트베드<br>투자일임업자 파트너<br>비용 ~1,000만원</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-label" style="padding-top:20px;">2027-01~06</div>
+        <div class="tl-title">Phase 3</div>
+        <div class="tl-sub">FSC 신고<br>공모 ETF or SMA 출시<br>목표 AUM 50B KRW</div>
+      </div>
+    </div>
+    <div class="card-grid c2">
+      <div class="card">
+        <h3 style="font-size:14px; margin-bottom:10px;">즉시 가능</h3>
+        <ul style="font-size:13px; color:var(--muted); line-height:2; list-style:none; padding:0;">
+          <li>✅ pension.wwai.app 시뮬 노출</li>
+          <li>✅ 투자자 피드백 수집</li>
+          <li>✅ 일별 NAV 자동 추적</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="font-size:14px; margin-bottom:10px;">출시 전 필수</h3>
+        <ul style="font-size:13px; color:var(--muted); line-height:2; list-style:none; padding:0;">
+          <li>⚠️ 코스콤 테스트베드 심사</li>
+          <li>⚠️ 투자일임업자 파트너</li>
+          <li>⚠️ Walk-forward OOS 검증</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 10: RISKS ── -->
+  <div class="slide" id="s10">
+    <div class="label">Risk Disclosure</div>
+    <h2>리스크 고지</h2>
+    <div style="display:flex; flex-direction:column; gap:10px; margin-top:8px;">
+      <div class="card" style="display:flex; gap:16px; align-items:flex-start;">
+        <div style="font-size:20px; flex-shrink:0;">📊</div>
+        <div><strong>백테스트 한계</strong>
+          <p style="font-size:13px; color:var(--muted); margin-top:4px; line-height:1.6;">4.2년 시뮬레이션. SR 신뢰구간 ±0.6. 과거 성과가 미래를 보장하지 않음.</p></div>
+      </div>
+      <div class="card" style="display:flex; gap:16px; align-items:flex-start;">
+        <div style="font-size:20px; flex-shrink:0;">🔍</div>
+        <div><strong>룩어헤드 바이어스 (Option B)</strong>
+          <p style="font-size:13px; color:var(--muted); margin-top:4px; line-height:1.6;">유니버스에 현재 상장 ETF 소급 적용. 초기 수익률 소폭 과장 가능. 인정·미수정.</p></div>
+      </div>
+      <div class="card" style="display:flex; gap:16px; align-items:flex-start;">
+        <div style="font-size:20px; flex-shrink:0;">⏱️</div>
+        <div><strong>레짐 신호 래그</strong>
+          <p style="font-size:13px; color:var(--muted); margin-top:4px; line-height:1.6;">MA60은 후행 지표. 레짐 전환 시 2-6주 오차 → 1M -12% 사례 참조.</p></div>
+      </div>
+      <div class="card" style="display:flex; gap:16px; align-items:flex-start;">
+        <div style="font-size:20px; flex-shrink:0;">💰</div>
+        <div><strong>회전율 비용</strong>
+          <p style="font-size:13px; color:var(--muted); margin-top:4px; line-height:1.6;">S3.5 ~38% 회전율. 10~15bps 기준 연 40~60bp 비용 드래그.</p></div>
+      </div>
+      <div class="card" style="display:flex; gap:16px; align-items:flex-start;">
+        <div style="font-size:20px; flex-shrink:0;">📋</div>
+        <div><strong>규제 미보장</strong>
+          <p style="font-size:13px; color:var(--muted); margin-top:4px; line-height:1.6;">코스콤 테스트베드 통과 미보장. 투자일임업자 파트너 필요. 로드맵은 추정치.</p></div>
+      </div>
+    </div>
+    <div style="margin-top:12px; font-size:11px; color:rgba(148,163,184,0.5); line-height:1.6;">
+      이 자료는 내부 제품 개발 논의용입니다. 투자 권유 또는 유가증권 청약 권유가 아닙니다. | pension.wwai.app
+    </div>
+  </div>
+
+  <!-- ── SLIDE 11: SUMMARY ── -->
+  <div class="slide" id="s11">
+    <div class="label">Summary</div>
+    <h2>요약: 가능한가? 어떻게 피칭하나?</h2>
+    <div class="card-grid c2" style="gap:16px; margin-top:8px;">
+      <div class="card" style="border-color:rgba(16,185,129,0.4); background:rgba(16,185,129,0.05);">
+        <h3 style="color:var(--green); margin-bottom:14px;">✅ YES — 가능하다</h3>
+        <ul style="font-size:14px; color:var(--muted); line-height:2.2; list-style:none; padding:0;">
+          <li>✅ FSC 70/30 규정 충족 (bond sleeve)</li>
+          <li>✅ 백테스트 4.2년 (FSC 최소 3년 초과)</li>
+          <li>✅ Calmar 1.62, MaxDD -15.9% (검증)</li>
+          <li>✅ KRX 상장 ETF만 (직접투자 가능)</li>
+          <li>✅ pension.wwai.app 즉시 노출 가능</li>
+        </ul>
+      </div>
+      <div class="card" style="border-color:rgba(245,158,11,0.4); background:rgba(245,158,11,0.05);">
+        <h3 style="color:var(--yellow); margin-bottom:14px;">⚠️ 단, 조건 있음</h3>
+        <ul style="font-size:14px; color:var(--muted); line-height:2.2; list-style:none; padding:0;">
+          <li>⚠️ 코스콤 테스트베드 심사 (Phase 2)</li>
+          <li>⚠️ 회전율 72.6% → S3.5+IB 42.1% 검증</li>
+          <li>⚠️ Walk-forward OOS 검증 필요</li>
+          <li>⚠️ 투자일임업자 파트너 필요</li>
+          <li>⚠️ 공모 ETF: 14-18개월 소요</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px; border-color:rgba(59,130,246,0.4); background:rgba(59,130,246,0.05);">
+      <p style="font-size:15px; line-height:1.9;">
+        <strong style="color:var(--blue);">피칭 핵심 메시지:</strong>
+        "KRX 레짐이 BULL이면 반도체 AI ETF로 성장 참여, BEAR이면 방산·원자력으로 자동방어.
+        IRP/DC 연금에 맞게 채권 30%를 유지하면서도 Calmar 1.62, MaxDD -15.9%를 달성한
+        규칙 기반 레짐전환 전략. 현재 pension.wwai.app에서 확인 가능."
+      </p>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- ── Navigation ── -->
+<div class="nav">
+  <button onclick="go(-1)">←</button>
+  <div class="dot-nav" id="dots"></div>
+  <div class="counter" id="counter">1 / 11</div>
+  <button onclick="go(1)">→</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const N = slides.length;
+  let cur = 0;
+
+  const dotsEl = document.getElementById('dots');
+  for (let i = 0; i < N; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.onclick = () => goTo(i);
+    dotsEl.appendChild(d);
+  }
+
+  function goTo(n) {
+    slides[cur].classList.remove('active');
+    dotsEl.children[cur].classList.remove('active');
+    cur = (n + N) % N;
+    slides[cur].classList.add('active');
+    dotsEl.children[cur].classList.add('active');
+    document.getElementById('counter').textContent = `${cur + 1} / ${N}`;
+  }
+
+  function go(d) { goTo(cur + d); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') go(1);
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')  go(-1);
+  });
+</script>
+</body>
+</html>

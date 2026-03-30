@@ -1,0 +1,132 @@
+{
+  "product": {
+    "name": "WWAI 반도체↔방산 레짐전환 Active ETF",
+    "name_en": "WWAI SemiAI-Defense Regime Rotation ETF",
+    "code": "wwai-semiai-defense-rotation",
+    "version": "1.0.0",
+    "created": "2026-03-30",
+    "status": "paper_portfolio",
+    "demo_url": "pension.wwai.app"
+  },
+  "pipeline": {
+    "mode1_discovery": {
+      "label": "M1 Baseline EW",
+      "universe": "반도체/AI ETF 15개",
+      "cagr": 18.6,
+      "maxdd": -35.6,
+      "calmar": 0.52,
+      "sharpe": 0.670,
+      "turnover": null
+    },
+    "mode2_enhancement": {
+      "label": "M2-D Regime+Bond",
+      "layers": ["KrxRegimeGateLayer(bear=0.1)", "KrxEtfBondSleeveLayer(top_n=2)"],
+      "cagr": 21.9,
+      "maxdd": -28.4,
+      "calmar": 0.771,
+      "sharpe": 0.979,
+      "turnover": null
+    },
+    "mode3_distillation": {
+      "label": "S4 MomRot (Best)",
+      "teacher": "방산/중공업/원자력/인프라 8개 ETF",
+      "student": "반도체/AI 15개 ETF",
+      "regime_signal": "KODEX200 vs MA60",
+      "bull_logic": "Student top-5 by 21d momentum",
+      "bear_logic": "Teacher top-5 by 21d momentum",
+      "cagr": 41.0,
+      "maxdd": -22.34,
+      "calmar": 1.833,
+      "sharpe": 1.477,
+      "turnover": 72.6,
+      "backtest_start": "2022-01-01",
+      "backtest_end": "2026-03-30"
+    }
+  },
+  "fsc_compliant_variant": {
+    "label": "S3.5+IB — Bond 30% + NestedInertia (IRP/DC Ready)",
+    "stack": "S3.5+IB",
+    "changes": [
+      "top_k 완화: bull 8→12, bear 5→7 (회전율 감소)",
+      "bond_fraction 30% 강제 편입 (FSC 안전자산 의무, equity≤70%)",
+      "nested_inertia(lam_stock=0.40, lam_theme=0.60) — 가중치 스무딩"
+    ],
+    "cagr": 25.7,
+    "maxdd": -15.88,
+    "calmar": 1.618,
+    "sharpe": 1.428,
+    "turnover": 42.1,
+    "fsc_irp_compliant": true,
+    "fsc_equity_pct": 70.0,
+    "fsc_safe_pct": 30.0,
+    "backtest_start": "2022-01-01",
+    "backtest_end": "2026-03-30",
+    "note": "Validated backtest. Bond 30% always-on (best momentum bond ETF). Equity 70% rotates bull→student/bear→teacher."
+  },
+  "s35_variants": {
+    "S3.5":   {"sr": 1.425, "maxdd": -22.86, "calmar": 1.632, "cagr": 37.3, "turnover": 56.7},
+    "S3.5+I": {"sr": 1.404, "maxdd": -22.44, "calmar": 1.608, "cagr": 36.1, "turnover": 36.7},
+    "S3.5+B": {"sr": 1.439, "maxdd": -16.40, "calmar": 1.612, "cagr": 26.4, "turnover": 68.5},
+    "S3.5+IB":{"sr": 1.428, "maxdd": -15.88, "calmar": 1.618, "cagr": 25.7, "turnover": 42.1}
+  },
+  "recent_performance": {
+    "as_of": "2026-03-30",
+    "regime": "BULL",
+    "kodex200_vs_ma60_pct": 4.85,
+    "s4_1m": -12.38,
+    "s4_3m": 48.27,
+    "s4_6m": 98.08,
+    "s4_6m_maxdd": -18.85,
+    "kospi_1m": -10.63
+  },
+  "teacher_benchmark": {
+    "label": "Teacher EW (방산/원자력 8개)",
+    "cagr": 35.5,
+    "maxdd": -17.09,
+    "calmar": 2.080,
+    "sharpe": 1.989,
+    "turnover": 2.5
+  },
+  "universe": {
+    "student": [
+      {"code": "395160", "name": "KODEX AI반도체"},
+      {"code": "469150", "name": "ACE AI반도체TOP3+"},
+      {"code": "396500", "name": "TIGER 반도체TOP10"},
+      {"code": "091230", "name": "TIGER 반도체"},
+      {"code": "091160", "name": "KODEX 반도체"},
+      {"code": "395270", "name": "HANARO Fn K-반도체"},
+      {"code": "471990", "name": "KODEX AI반도체핵심장비"},
+      {"code": "139260", "name": "TIGER 200 IT"},
+      {"code": "455850", "name": "SOL AI반도체소부장"},
+      {"code": "381180", "name": "TIGER 미국필라델피아반도체나스닥"},
+      {"code": "390390", "name": "KODEX 미국반도체"},
+      {"code": "412770", "name": "TIGER 글로벌AI플랫폼액티브"},
+      {"code": "457480", "name": "ACE 테슬라밸류체인액티브"},
+      {"code": "394670", "name": "TIGER 글로벌리튬&2차전지SOLACTIVE"},
+      {"code": "229200", "name": "KODEX 코스닥150"}
+    ],
+    "teacher": [
+      {"code": "269530", "name": "KODEX 방위산업"},
+      {"code": "269420", "name": "KODEX 한국조선해양"},
+      {"code": "139230", "name": "TIGER 200 중공업"},
+      {"code": "449450", "name": "ACE 원자력"},
+      {"code": "434730", "name": "KODEX 원자력"},
+      {"code": "444200", "name": "TIGER 원자력테마"},
+      {"code": "157500", "name": "KODEX 인프라"},
+      {"code": "463640", "name": "HANARO 원자력"}
+    ]
+  },
+  "roadmap": {
+    "phase0": {"label": "백테스트 완료", "status": "done", "months": "2026-03"},
+    "phase1": {"label": "pension.wwai.app 페이퍼 포트폴리오", "status": "next", "months": "2026-04~06"},
+    "phase2": {"label": "코스콤 테스트베드 등록", "status": "planned", "months": "2026-07~12"},
+    "phase3": {"label": "FSC 신고 및 출시", "status": "planned", "months": "2027-01~06"}
+  },
+  "risks": [
+    "백테스트 4.2년 — 통계적 SR 신뢰구간 ±0.6",
+    "룩어헤드 바이어스 Option B (인정·미수정)",
+    "MA60 신호 래그 2-6주",
+    "반도체 섹터 집중 위험 (bull 구간)",
+    "코스콤 테스트베드 미심사 — 일임 출시 전 필수"
+  ]
+}

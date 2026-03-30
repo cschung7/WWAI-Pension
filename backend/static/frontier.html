@@ -53,6 +53,18 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 .secondary-title{font-size:12px;font-weight:700;color:#94a3b8;margin-bottom:6px}
 .secondary-chart{width:100%;height:280px}
 
+/* ── ETF search ── */
+.search-bar{display:flex;align-items:center;gap:8px;padding:8px 24px;border-top:1px solid #1e293b;background:#0a1120}
+.search-bar input{flex:1;max-width:360px;padding:6px 10px;background:#1e293b;border:1px solid #334155;
+  border-radius:8px;color:#f1f5f9;font-size:13px;outline:none;font-family:inherit}
+.search-bar input:focus{border-color:#3b82f6}
+.search-bar input::placeholder{color:#475569}
+.search-bar button{padding:4px 10px;background:transparent;border:1px solid #334155;border-radius:6px;
+  color:#64748b;font-size:12px;cursor:pointer}
+.search-bar button:hover{border-color:#94a3b8;color:#cbd5e1}
+.search-hl-badge{font-size:12px;color:#e2e8f0;background:#1e293b;border-radius:6px;
+  padding:3px 10px;border-left:3px solid #f59e0b;display:none}
+
 /* ── constraint panel ── */
 .constraint-wrap{padding:14px 24px;border-top:1px solid #1e293b;background:#0c1424}
 .constraint-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -71,7 +83,12 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 
 <div class="header">
   <div>
-    <div class="header-title">📊 korea-roboAdvisor-etf-frontier <span class="badge badge-live">Live</span></div>
+    <a href="/" style="font-weight:700;font-size:1rem;color:#fbbf24;text-decoration:none;margin-right:1rem">WWAI 연금</a>
+    <a href="/registry" style="color:#94a3b8;text-decoration:none;font-size:.8rem;margin-right:.75rem">전략 레지스트리</a>
+    <a href="/scatter" style="color:#94a3b8;text-decoration:none;font-size:.8rem">전략 지도</a>
+  </div>
+  <div>
+    <div class="header-title" style="margin-top:.25rem">📊 korea-roboAdvisor-etf-frontier <span class="badge badge-live">Live</span></div>
     <div class="header-sub">한국 IRP/DC 연금 FSC-적격 ETF 효율적 투자선 · 주식 ≤70% · 채권 ≥30%</div>
   </div>
   <div style="margin-left:auto;display:flex;gap:6px">
@@ -81,8 +98,9 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
       <button class="chip active" data-v="3y">3Y</button>
     </div>
     <div class="chip-group" id="topn-chips">
-      <button class="chip active" data-v="100">Top-100</button>
-      <button class="chip" data-v="300">Top-300</button>
+      <button class="chip active" data-v="100">WWAI Top-100</button>
+      <button class="chip" data-v="300">WWAI Top-300</button>
+      <button class="chip" data-v="9999">WWAI≥0 전체</button>
     </div>
   </div>
 </div>
@@ -108,6 +126,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
     <button class="chip active" data-v="mixed_bond">혼합채권</button>
     <button class="chip active" data-v="commodity">원자재</button>
   </div>
+</div>
+
+<div class="search-bar">
+  <span class="filter-label">ETF 검색</span>
+  <input id="etf-search" list="etf-datalist" placeholder="티커 또는 ETF명 입력… (예: 069500, S&P500)" autocomplete="off" spellcheck="false">
+  <datalist id="etf-datalist"></datalist>
+  <button id="etf-search-clear" onclick="clearETFHighlight()">✕ 초기화</button>
+  <div class="search-hl-badge" id="hl-badge"></div>
 </div>
 
 <div class="chart-wrap">
@@ -309,31 +335,6 @@ function renderChart() {
 
   const d = state.data;
 
-  // Trace 0: Monte Carlo heat (Sharpe-coloured scatter)
-  const mcX = d.monte_carlo.map(p => p.sigma * 100);
-  const mcY = d.monte_carlo.map(p => p.mu * 100);
-  const mcC = d.monte_carlo.map(p => p.sharpe);
-  const trMC = {
-    x: mcX, y: mcY,
-    mode: 'markers',
-    type: 'scatter',
-    name: '무작위 포트폴리오',
-    marker: {
-      color: mcC,
-      colorscale: 'Viridis',
-      size: 3,
-      opacity: 0.4,
-      colorbar: {
-        title: 'Sharpe',
-        thickness: 12,
-        len: 0.6,
-        x: 1.01,
-        tickfont: {size: 10, color: '#94a3b8'},
-        titlefont: {size: 11, color: '#94a3b8'},
-      },
-    },
-    hovertemplate: 'σ=%{x:.1f}%<br>μ=%{y:.1f}%<br>Sharpe=%{marker.color:.2f}<extra></extra>',
-  };
 
   // Trace 1: Frontier curve
   const fcX = d.frontier_curve.map(p => p.sigma * 100);
@@ -410,7 +411,7 @@ function renderChart() {
     hovertemplate: `● 내 위험성향 포트폴리오<br>주식 ${sp.equity_pct}% | 채권 ${sp.safe_pct}%<br>σ=${(sp.sigma*100).toFixed(1)}%<br>μ=${(sp.mu*100).toFixed(1)}%<br>Sharpe ${sp.sharpe.toFixed(2)}<extra></extra>`,
   };
 
-  const traces = [trMC, trFrontier, ...etfTraces, trMVP, trMS, trGstar];
+  const traces = [trFrontier, ...etfTraces, trMVP, trMS, trGstar];
 
   const layout = {
     paper_bgcolor: '#0f172a',
@@ -441,6 +442,7 @@ function renderChart() {
   Plotly.newPlot('chart', traces, layout, config);
   renderSecondaryCharts(state.data.monte_carlo);
   updateStats();
+  buildSearchList();
 }
 
 function updateStats() {
@@ -454,7 +456,7 @@ function updateStats() {
   document.getElementById('stat-gstar').textContent =
     `주식 ${gamma_star.equity_pct}%  채권 ${gamma_star.safe_pct}%  μ=${(gamma_star.mu*100).toFixed(1)}%  SR=${gamma_star.sharpe.toFixed(2)}`;
   document.getElementById('stat-meta').textContent =
-    `ETF ${m.n_etfs}개 · ${m.weeks}주 데이터 · ${m.lookback} 룩백`;
+    `ETF ${m.n_etfs}개 · ${m.weeks}주 데이터 · ${m.lookback} · ${m.universe_mode || ''}`;
 }
 
 // ── Secondary chart helpers ───────────────────────────────────────────────
@@ -479,66 +481,76 @@ function _secAxisStyle(title) {
 }
 
 function _buildSecTraces(mcFiltered, xKey, special) {
-  // ETF name lookup built from scatter_etfs
   const nameMap = {};
   (state.data.scatter_etfs || []).forEach(e => { nameMap[e.ticker] = e.name; });
 
-  const parKey = xKey === 'max_dd' ? 'p_msdd' : 'p_mscalmar';
-  const reg = mcFiltered.filter(p => !p[parKey]);
-  const par = mcFiltered.filter(p =>  p[parKey]);
   const xScale = xKey === 'max_dd' ? 100 : 1;
 
-  // Stats line shared by MC/Pareto
-  const statLine = (p) => {
-    return `σ=${(p.sigma*100).toFixed(1)}%  μ=${(p.mu*100).toFixed(1)}%  Sharpe=${p.sharpe.toFixed(2)}`
-      + `<br>MaxDD=${(p.max_dd*100).toFixed(1)}%  Calmar=${p.calmar.toFixed(2)}`;
-  };
-
-  const trReg = {
-    x: reg.map(p => p[xKey] * xScale),
-    y: reg.map(p => p.sharpe),
+  // ── Individual ETF dots grouped by asset class (same colors as main chart) ─
+  const etfsByClass = {};
+  (state.data.scatter_etfs || []).forEach(e => {
+    if (e[xKey] === undefined || e[xKey] === null) return;
+    const cls = e.asset_class || 'other';
+    (etfsByClass[cls] = etfsByClass[cls] || []).push(e);
+  });
+  const etfTraces = Object.entries(etfsByClass).map(([cls, etfs]) => ({
+    x: etfs.map(e => e[xKey] * xScale),
+    y: etfs.map(e => e.sharpe),
     mode: 'markers', type: 'scatter',
-    marker: {color: '#475569', size: 3, opacity: 0.35},
-    text: reg.map(p => `무작위 포트폴리오<br>${statLine(p)}`),
+    name: CLASS_KO[cls] || cls,
+    marker: {color: CLASS_COLORS[cls] || '#94a3b8', size: 5, opacity: 0.65,
+             line: {color: '#0c1424', width: 0.5}},
+    text: etfs.map(e => {
+      const xLabel = xKey === 'max_dd'
+        ? `MaxDD ${(e.max_dd * 100).toFixed(1)}%`
+        : `Calmar ${e.calmar.toFixed(2)}`;
+      return `${e.name}<br>Sharpe ${e.sharpe.toFixed(2)}  ${xLabel}`
+           + `<br>μ=${(e.mu*100).toFixed(1)}%  σ=${(e.sigma*100).toFixed(1)}%<br>${e.signal}`;
+    }),
     hovertemplate: '%{text}<extra></extra>',
-  };
+  }));
 
-  const trPar = {
+  // ── Pareto-efficient portfolios from MC (achievable boundary) ─────────────
+  const parKey = xKey === 'max_dd' ? 'p_msdd' : 'p_mscalmar';
+  const par = mcFiltered.filter(p => p[parKey]);
+  const trPar = par.length ? {
     x: par.map(p => p[xKey] * xScale),
     y: par.map(p => p.sharpe),
     mode: 'markers', type: 'scatter',
-    marker: {color: '#f97316', size: 9, symbol: 'asterisk', opacity: 0.9,
+    marker: {color: '#f97316', size: 8, symbol: 'asterisk', opacity: 0.85,
              line: {color: '#f97316', width: 1.5}},
-    text: par.map(p => `✱ 파레토 포트폴리오<br>${statLine(p)}`),
+    text: par.map(p =>
+      `✱ 파레토 효율 포트폴리오<br>Sharpe=${p.sharpe.toFixed(2)}`
+      + `<br>MaxDD=${(p.max_dd*100).toFixed(1)}%  Calmar=${p.calmar.toFixed(2)}`
+      + `<br>μ=${(p.mu*100).toFixed(1)}%  σ=${(p.sigma*100).toFixed(1)}%`),
     hovertemplate: '%{text}<extra></extra>',
-  };
+  } : null;
 
-  // Special portfolios — top-3 holdings shown by ETF name
+  // ── Special portfolios ────────────────────────────────────────────────────
   function spPt(key, label, color, symbol, size) {
     const pt = special[key];
     if (!pt) return null;
-    const xv = xKey === 'max_dd' ? pt.max_dd * 100 : pt.calmar;
-    const stats = `σ=${(pt.sigma*100).toFixed(1)}%  μ=${(pt.mu*100).toFixed(1)}%  Sharpe=${pt.sharpe.toFixed(2)}`
-      + `<br>MaxDD=${(pt.max_dd*100).toFixed(1)}%  Calmar=${pt.calmar.toFixed(2)}`;
+    const xv = pt[xKey] !== undefined ? pt[xKey] * xScale : null;
+    if (xv === null || isNaN(xv)) return null;
+    const stats = `Sharpe=${pt.sharpe.toFixed(2)}`
+      + `<br>MaxDD=${(pt.max_dd*100).toFixed(1)}%  Calmar=${pt.calmar.toFixed(2)}`
+      + `<br>μ=${(pt.mu*100).toFixed(1)}%  σ=${(pt.sigma*100).toFixed(1)}%`;
     const top3 = Object.entries(pt.weights || {})
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([t, w]) => `${nameMap[t] || t}  ${(w*100).toFixed(0)}%`)
-      .join('<br>');
-    const tip = `<b>${label}</b><br>${stats}<br>─<br>${top3}`;
+      .sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([t, w]) => `${nameMap[t] || t}  ${(w*100).toFixed(0)}%`).join('<br>');
     return {
       x: [xv], y: [pt.sharpe],
       mode: 'markers', type: 'scatter',
       marker: {color, size, symbol, line: {color: '#0c1424', width: 1.5}},
-      text: [tip],
+      text: [`<b>${label}</b><br>${stats}<br>─<br>${top3}`],
       hovertemplate: '%{text}<extra></extra>',
     };
   }
-  const ptMVP  = spPt('mvp',        '◆ MVP',        '#e2e8f0', 'diamond', 10);
-  const ptMS   = spPt('max_sharpe', '★ 최대샤프',   '#f59e0b', 'star',    12);
-  const ptGS   = spPt('gamma_star', '● 위험성향',   '#10b981', 'circle',  10);
+  const ptMVP = spPt('mvp',        '◆ MVP',       '#e2e8f0', 'diamond', 10);
+  const ptMS  = spPt('max_sharpe', '★ 최대샤프',  '#f59e0b', 'star',    12);
+  const ptGS  = spPt('gamma_star', '● 위험성향',  '#10b981', 'circle',  10);
 
-  return [trReg, trPar, ptMVP, ptMS, ptGS].filter(Boolean);
+  return [...etfTraces, trPar, ptMVP, ptMS, ptGS].filter(Boolean);
 }
 
 function renderSecondaryCharts(mcData) {
@@ -595,6 +607,92 @@ function applyConstraints() {
     clearTimeout(constraintDebounce);
     constraintDebounce = setTimeout(applyConstraints, 300);
   });
+});
+
+// ── ETF Search & Highlight ────────────────────────────────────────────────
+
+// Track how many highlight traces were appended per chart
+const _hlCount = {chart: 0, 'chart-msdd': 0, 'chart-mscalmar': 0};
+
+function _removeHL(chartId) {
+  const el = document.getElementById(chartId);
+  if (!el || !el.data || _hlCount[chartId] === 0) return;
+  const n = el.data.length;
+  const indices = [];
+  for (let i = n - _hlCount[chartId]; i < n; i++) indices.push(i);
+  try { Plotly.deleteTraces(chartId, indices); } catch(e) {}
+  _hlCount[chartId] = 0;
+}
+
+function _addHL(chartId, x, y, label) {
+  _removeHL(chartId);
+  const el = document.getElementById(chartId);
+  if (!el || !el.data) return;
+  // ring marker
+  Plotly.addTraces(chartId, {
+    x: [x], y: [y],
+    mode: 'markers+text', type: 'scatter',
+    marker: {color: 'rgba(0,0,0,0)', size: 22, symbol: 'circle',
+             line: {color: '#facc15', width: 2.5}},
+    text: [`  ${label}`],
+    textposition: 'middle right',
+    textfont: {color: '#facc15', size: 11, family: 'Pretendard, Noto Sans KR, sans-serif'},
+    hoverinfo: 'skip', showlegend: false,
+  });
+  _hlCount[chartId] = 1;
+}
+
+function buildSearchList() {
+  const dl = document.getElementById('etf-datalist');
+  if (!state.data) return;
+  dl.innerHTML = state.data.scatter_etfs
+    .map(e => `<option value="${e.ticker} — ${e.name}">`)
+    .join('');
+}
+
+function clearETFHighlight() {
+  document.getElementById('etf-search').value = '';
+  document.getElementById('hl-badge').style.display = 'none';
+  ['chart', 'chart-msdd', 'chart-mscalmar'].forEach(_removeHL);
+}
+
+function highlightETF(query) {
+  if (!state.data || !query.trim()) return clearETFHighlight();
+
+  // parse ticker: value may be "069500 — KODEX 200" or just "069500" or a name fragment
+  const parts = query.split(' — ');
+  const tickerCandidate = parts[0].trim();
+  const nameCandidate   = query.toLowerCase();
+
+  const etf = state.data.scatter_etfs.find(e =>
+    e.ticker === tickerCandidate ||
+    e.name.toLowerCase().includes(nameCandidate) ||
+    nameCandidate.includes(e.name.toLowerCase())
+  );
+  if (!etf) return;
+
+  const shortName = etf.name.length > 18 ? etf.name.slice(0, 18) + '…' : etf.name;
+  const badge = document.getElementById('hl-badge');
+  badge.textContent = `${etf.ticker}  ${etf.name}  |  σ=${(etf.sigma*100).toFixed(1)}%  μ=${(etf.mu*100).toFixed(1)}%  SR=${etf.sharpe.toFixed(2)}  MaxDD=${(etf.max_dd*100).toFixed(1)}%`;
+  badge.style.display = 'block';
+
+  // Main chart: x=sigma*100, y=mu*100
+  _addHL('chart', etf.sigma * 100, etf.mu * 100, shortName);
+
+  // Secondary chart 1: x=max_dd*100, y=sharpe
+  if (etf.max_dd !== undefined)
+    _addHL('chart-msdd', etf.max_dd * 100, etf.sharpe, shortName);
+
+  // Secondary chart 2: x=calmar, y=sharpe
+  if (etf.calmar !== undefined)
+    _addHL('chart-mscalmar', etf.calmar, etf.sharpe, shortName);
+}
+
+let _searchDebounce = null;
+document.getElementById('etf-search').addEventListener('input', function() {
+  clearTimeout(_searchDebounce);
+  const val = this.value;
+  _searchDebounce = setTimeout(() => highlightETF(val), 200);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────

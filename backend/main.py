@@ -563,6 +563,31 @@ async def build_portfolio(req: PensionPortfolioRequest) -> dict:
     }
 
 
+# ─── Registry ────────────────────────────────────────────────────────────────
+
+from backend.pension_registry import router as registry_router  # noqa: E402
+app.include_router(registry_router, prefix="/registry", tags=["registry"])
+
+from backend.pension_chat import router as chat_router  # noqa: E402
+app.include_router(chat_router, prefix="/api/pension/chat", tags=["chat"])
+
+
+@app.get("/registry", response_class=HTMLResponse)
+async def registry_page() -> HTMLResponse:
+    html_path = STATIC_DIR / "registry.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>전략 레지스트리</h1><p>Building…</p>")
+
+
+@app.get("/scatter", response_class=HTMLResponse)
+async def scatter_page() -> HTMLResponse:
+    html_path = STATIC_DIR / "scatter.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>전략 지도</h1><p>Building…</p>")
+
+
 # ─── Efficient Frontier ───────────────────────────────────────────────────────
 
 from backend.frontier import build_frontier_response   # noqa: E402
@@ -581,18 +606,30 @@ async def frontier_data(
     gamma:    float = 2.5,
     top_n:    int   = 100,
 ) -> dict:
+    import asyncio
     if lookback not in ("1y", "2y", "3y"):
         lookback = "3y"
     gamma  = max(0.5, min(float(gamma), 15.0))
-    top_n  = max(10, min(int(top_n), 821))
-    return build_frontier_response(lookback, top_n, gamma)
+    # 9999 = "WWAI≥0 전체" mode; otherwise cap at 821
+    top_n  = 9999 if int(top_n) >= 999 else max(10, min(int(top_n), 821))
+    return await asyncio.to_thread(build_frontier_response, lookback, top_n, gamma)
 
 
 # ─── Frontend ─────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
-    html_path = STATIC_DIR / "index.html"
+    """New: Manus-style pension chat front page."""
+    html_path = STATIC_DIR / "chat.html"
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>WWAI-Pension</h1><p>Static UI not yet built.</p>")
+    return HTMLResponse("<h1>WWAI-Pension Chat</h1><p>Building…</p>")
+
+
+@app.get("/fund-buyer-profile", response_class=HTMLResponse)
+async def fund_buyer_profile() -> HTMLResponse:
+    """Former index — 4-step pension profile wizard."""
+    html_path = STATIC_DIR / "fund_buyer_profile.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>연금 투자자 프로필</h1><p>Building…</p>")

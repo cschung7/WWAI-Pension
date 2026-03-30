@@ -428,12 +428,21 @@ def build_frontier_response(lookback: str = "3y", top_n: int = 100, gamma: float
     universe = universe[universe["ticker"].apply(
         lambda t: (PRICE_DIR / f"{t}.csv").exists()
     )].copy()
-    universe = universe.nlargest(top_n, "ucs_score").reset_index(drop=True)
 
-    tickers      = universe["ticker"].tolist()
-    asset_classes = universe.set_index("ticker")["asset_class"].to_dict()
+    # top_n >= 999 means "WWAI ≥ 0": scatter ALL ETFs, but optimize only top-100
+    all_mode = (top_n >= 999)
+    if all_mode:
+        univ_all = universe.sort_values("ucs_score", ascending=False).reset_index(drop=True)
+        univ_opt = universe.nlargest(100, "ucs_score").reset_index(drop=True)
+    else:
+        univ_all = universe.nlargest(top_n, "ucs_score").reset_index(drop=True)
+        univ_opt = univ_all
 
-    ret_df = load_returns(tickers, lookback)
+    # Load returns for optimisation subset first
+    tickers_opt   = univ_opt["ticker"].tolist()
+    asset_classes = univ_all.set_index("ticker")["asset_class"].to_dict()
+
+    ret_df = load_returns(tickers_opt, lookback)
     if ret_df.empty or len(ret_df.columns) < 5:
         raise ValueError("Insufficient return data")
 
@@ -447,11 +456,11 @@ def build_frontier_response(lookback: str = "3y", top_n: int = 100, gamma: float
     lw.fit(ret_df.values)
     cov_arr = lw.covariance_
 
-    ac       = [asset_classes.get(t, "domestic_equity") for t in valid_tickers]
-    is_equity = np.array([c in EQUITY_CLASSES for c in ac])
-    is_safe   = np.array([c in SAFE_CLASSES   for c in ac])
+    ac_opt    = [asset_classes.get(t, "domestic_equity") for t in valid_tickers]
+    is_equity = np.array([c in EQUITY_CLASSES for c in ac_opt])
+    is_safe   = np.array([c in SAFE_CLASSES   for c in ac_opt])
 
-    log.info(f"  {n} ETFs, {weeks_actual} weekly obs — running Monte Carlo…")
+    log.info(f"  {n} ETFs (opt), {weeks_actual} weekly obs — running Monte Carlo…")
     mc = run_monte_carlo(mu_arr, cov_arr, is_equity, is_safe, weeks_per_year, ret_df)
 
     log.info("  Monte Carlo done — computing analytical frontier…")
@@ -461,11 +470,26 @@ def build_frontier_response(lookback: str = "3y", top_n: int = 100, gamma: float
     specials = special_portfolios(mu_arr, cov_arr, valid_tickers, is_equity, is_safe,
                                    weeks_per_year, ret_df, gamma)
 
-    # Individual ETF scatter
-    ann_mu  = mu_arr * weeks_per_year
-    ann_sig = ret_df.std().values * sqrt(weeks_per_year)
-    ucs_map = ucs
+    # For all_mode, also load per-ETF stats for the full universe
+    if all_mode:
+        tickers_all = univ_all["ticker"].tolist()
+        ret_df_all  = load_returns(tickers_all, lookback)
+        valid_all   = ret_df_all.columns.tolist() if not ret_df_all.empty else valid_tickers
+        ret_df_scatter = ret_df_all if not ret_df_all.empty else ret_df
+        valid_scatter  = valid_all
+        ac_scatter     = [asset_classes.get(t, "domestic_equity") for t in valid_scatter]
+        ann_mu_scatter  = ret_df_scatter.mean().values * weeks_per_year
+        ann_sig_scatter = ret_df_scatter.std().values * sqrt(weeks_per_year)
+        rets_np_scatter = ret_df_scatter.values.astype(np.float64)
+        log.info(f"  all_mode: {len(valid_scatter)} ETFs in scatter")
+    else:
+        valid_scatter  = valid_tickers
+        ac_scatter     = ac_opt
+        ann_mu_scatter  = mu_arr * weeks_per_year
+        ann_sig_scatter = ret_df.std().values * sqrt(weeks_per_year)
+        rets_np_scatter = ret_df.values.astype(np.float64)
 
+    # Individual ETF scatter (uses full universe in all_mode)
     def _score_to_signal(score: float) -> str:
         if score >= 150: return "강한매수 ●●●●"
         if score >= 100: return "매수 ●●●○"
@@ -474,16 +498,25 @@ def build_frontier_response(lookback: str = "3y", top_n: int = 100, gamma: float
         return "신호없음 ○○○○"
 
     scatter_etfs = []
-    name_map = universe.set_index("ticker")["name"].to_dict()
-    for i, t in enumerate(valid_tickers):
-        sc = float(ucs_map.get(t, 0))
+    name_map = univ_all.set_index("ticker")["name"].to_dict()
+    for i, t in enumerate(valid_scatter):
+        sc = float(ucs.get(t, 0))
+        col_rets = rets_np_scatter[:, i]
+        equity   = np.cumprod(1.0 + col_rets)
+        peak     = np.maximum.accumulate(equity)
+        dd_arr   = (equity - peak) / np.maximum(peak, 1e-10)
+        etf_dd   = round(float(dd_arr.min()), 4)
+        etf_mu   = float(ann_mu_scatter[i])
+        etf_calmar = round(etf_mu / abs(etf_dd), 3) if etf_dd < -1e-6 else 0.0
         scatter_etfs.append({
             "ticker":      t,
             "name":        str(name_map.get(t, t)),
-            "asset_class": ac[i],
-            "mu":          round(float(ann_mu[i]), 4),
-            "sigma":       round(float(ann_sig[i]), 4),
-            "sharpe":      round((float(ann_mu[i]) - RF_RATE) / max(float(ann_sig[i]), 0.001), 3),
+            "asset_class": ac_scatter[i],
+            "mu":          round(etf_mu, 4),
+            "sigma":       round(float(ann_sig_scatter[i]), 4),
+            "sharpe":      round((etf_mu - RF_RATE) / max(float(ann_sig_scatter[i]), 0.001), 3),
+            "max_dd":      etf_dd,
+            "calmar":      etf_calmar,
             "ucs_score":   round(sc, 1),
             "signal":      _score_to_signal(sc),
         })
@@ -497,7 +530,7 @@ def build_frontier_response(lookback: str = "3y", top_n: int = 100, gamma: float
         "frontier_curve": curve,
         "special":        specials,
         "meta": {
-            "n_etfs":        n,
+            "n_etfs":        len(scatter_etfs),
             "lookback":      lookback,
             "lookback_days": {"1y": 365, "2y": 730, "3y": 1095}[lookback],
             "weeks":         weeks_actual,
@@ -505,6 +538,7 @@ def build_frontier_response(lookback: str = "3y", top_n: int = 100, gamma: float
             "compute_sec":   elapsed,
             "rf_rate":       RF_RATE,
             "gamma":         gamma,
+            "universe_mode": f"all·WWAI≥0 ({len(scatter_etfs)}개)" if all_mode else f"top_{top_n}",
         },
     }
 
