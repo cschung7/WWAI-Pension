@@ -479,22 +479,19 @@ function _secAxisStyle(title) {
 }
 
 function _buildSecTraces(mcFiltered, xKey, special) {
-  const d = state.data;
+  // ETF name lookup built from scatter_etfs
+  const nameMap = {};
+  (state.data.scatter_etfs || []).forEach(e => { nameMap[e.ticker] = e.name; });
 
-  // regular MC (non-Pareto)
   const parKey = xKey === 'max_dd' ? 'p_msdd' : 'p_mscalmar';
   const reg = mcFiltered.filter(p => !p[parKey]);
   const par = mcFiltered.filter(p =>  p[parKey]);
+  const xScale = xKey === 'max_dd' ? 100 : 1;
 
-  const xScale = xKey === 'max_dd' ? 100 : 1;  // MaxDD → %, Calmar → raw
-
-  // Full tooltip for MC portfolios
-  const mcTip = (p) => {
-    const xv = p[xKey] * xScale;
-    const base = `σ=${(p.sigma*100).toFixed(1)}%  μ=${(p.mu*100).toFixed(1)}%<br>Sharpe=${p.sharpe.toFixed(2)}`;
-    return xKey === 'max_dd'
-      ? `${base}<br>MaxDD=${xv.toFixed(1)}%  Calmar=${p.calmar.toFixed(2)}`
-      : `${base}<br>Calmar=${xv.toFixed(2)}  MaxDD=${(p.max_dd*100).toFixed(1)}%`;
+  // Stats line shared by MC/Pareto
+  const statLine = (p) => {
+    return `σ=${(p.sigma*100).toFixed(1)}%  μ=${(p.mu*100).toFixed(1)}%  Sharpe=${p.sharpe.toFixed(2)}`
+      + `<br>MaxDD=${(p.max_dd*100).toFixed(1)}%  Calmar=${p.calmar.toFixed(2)}`;
   };
 
   const trReg = {
@@ -502,7 +499,7 @@ function _buildSecTraces(mcFiltered, xKey, special) {
     y: reg.map(p => p.sharpe),
     mode: 'markers', type: 'scatter',
     marker: {color: '#475569', size: 3, opacity: 0.35},
-    text: reg.map(p => mcTip(p)),
+    text: reg.map(p => `무작위 포트폴리오<br>${statLine(p)}`),
     hovertemplate: '%{text}<extra></extra>',
   };
 
@@ -512,20 +509,23 @@ function _buildSecTraces(mcFiltered, xKey, special) {
     mode: 'markers', type: 'scatter',
     marker: {color: '#f97316', size: 9, symbol: 'asterisk', opacity: 0.9,
              line: {color: '#f97316', width: 1.5}},
-    text: par.map(p => `✱ 파레토<br>${mcTip(p)}`),
+    text: par.map(p => `✱ 파레토 포트폴리오<br>${statLine(p)}`),
     hovertemplate: '%{text}<extra></extra>',
   };
 
-  // Special portfolios — no inline text labels (they overlap); use hover only
+  // Special portfolios — top-3 holdings shown by ETF name
   function spPt(key, label, color, symbol, size) {
     const pt = special[key];
     if (!pt) return null;
     const xv = xKey === 'max_dd' ? pt.max_dd * 100 : pt.calmar;
-    const tip = `${label}<br>σ=${(pt.sigma*100).toFixed(1)}%  μ=${(pt.mu*100).toFixed(1)}%`
-      + `<br>Sharpe=${pt.sharpe.toFixed(2)}`
-      + (xKey === 'max_dd'
-          ? `<br>MaxDD=${xv.toFixed(1)}%  Calmar=${pt.calmar.toFixed(2)}`
-          : `<br>Calmar=${xv.toFixed(2)}  MaxDD=${(pt.max_dd*100).toFixed(1)}%`);
+    const stats = `σ=${(pt.sigma*100).toFixed(1)}%  μ=${(pt.mu*100).toFixed(1)}%  Sharpe=${pt.sharpe.toFixed(2)}`
+      + `<br>MaxDD=${(pt.max_dd*100).toFixed(1)}%  Calmar=${pt.calmar.toFixed(2)}`;
+    const top3 = Object.entries(pt.weights || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([t, w]) => `${nameMap[t] || t}  ${(w*100).toFixed(0)}%`)
+      .join('<br>');
+    const tip = `<b>${label}</b><br>${stats}<br>─<br>${top3}`;
     return {
       x: [xv], y: [pt.sharpe],
       mode: 'markers', type: 'scatter',
