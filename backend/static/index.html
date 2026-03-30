@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>WWAI 연금 로보어드바이저</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#334155;
+  --primary:#3b82f6;--primary-d:#1d4ed8;--primary-l:#60a5fa;
+  --success:#10b981;--warn:#f59e0b;--danger:#ef4444;
+  --text:#f8fafc;--text2:#cbd5e1;--text3:#64748b;
+  --border:#475569;--radius:12px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;min-height:100vh}
+
+/* NAV */
+nav{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:12px}
+nav .logo{font-size:18px;font-weight:700;color:var(--primary-l)}.logo span{color:var(--text2);font-weight:400}
+nav .badge{font-size:11px;background:#1d4ed8;color:#fff;padding:2px 8px;border-radius:99px}
+
+/* STEP INDICATOR */
+.steps{display:flex;justify-content:center;gap:0;padding:32px 24px 0}
+.step{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text3)}
+.step.active{color:var(--primary-l)}.step.done{color:var(--success)}
+.step .num{width:28px;height:28px;border-radius:50%;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
+.step.done .num{background:var(--success);border-color:var(--success);color:#fff}
+.step.active .num{background:var(--primary);border-color:var(--primary);color:#fff}
+.step-line{width:48px;height:2px;background:var(--border);flex-shrink:0}
+.step-line.done{background:var(--success)}
+
+/* MAIN CARD */
+main{max-width:740px;margin:32px auto;padding:0 16px 80px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px}
+.card-title{font-size:20px;font-weight:700;margin-bottom:6px}
+.card-sub{color:var(--text2);font-size:14px;margin-bottom:28px;line-height:1.5}
+
+/* FORM */
+.field{margin-bottom:20px}
+label{display:block;font-size:13px;color:var(--text2);margin-bottom:6px;font-weight:500}
+.required::after{content:" *";color:var(--danger)}
+input[type=number],select{
+  width:100%;background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);border-radius:8px;padding:10px 14px;font-size:15px;outline:none;
+  transition:border-color .2s
+}
+input[type=number]:focus,select:focus{border-color:var(--primary)}
+.unit{display:flex;gap:8px;align-items:center}
+.unit input{flex:1}.unit span{color:var(--text3);font-size:13px;white-space:nowrap}
+.radio-group{display:flex;flex-direction:column;gap:8px}
+.radio-option{display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1px solid var(--border);border-radius:8px;transition:all .15s}
+.radio-option:hover{border-color:var(--primary-l);background:rgba(59,130,246,.06)}
+.radio-option.selected{border-color:var(--primary);background:rgba(59,130,246,.12)}
+.radio-option input{display:none}
+.radio-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;transition:all .15s}
+.radio-option.selected .radio-dot{border-color:var(--primary);background:var(--primary)}
+.radio-label{font-size:14px}.radio-desc{font-size:12px;color:var(--text3)}
+
+/* CRRA Q */
+.crra-q{border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px}
+.crra-q p{font-size:14px;margin-bottom:12px;line-height:1.5}
+.crra-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.crra-btn{padding:10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text2);font-size:13px;cursor:pointer;transition:all .15s;text-align:left}
+.crra-btn:hover{border-color:var(--primary-l);color:var(--text)}
+.crra-btn.selected{border-color:var(--primary);background:rgba(59,130,246,.15);color:var(--primary-l)}
+
+/* RESULTS */
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+@media(max-width:500px){.result-grid{grid-template-columns:1fr}}
+.metric{background:var(--surface2);border-radius:8px;padding:16px}
+.metric-label{font-size:12px;color:var(--text3);margin-bottom:4px}
+.metric-value{font-size:22px;font-weight:700;color:var(--primary-l)}
+.metric-sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+.allocation-bar{height:12px;border-radius:6px;background:var(--surface2);overflow:hidden;display:flex;margin-bottom:8px}
+.bar-equity{background:var(--primary);transition:width .4s}
+.bar-safe{background:var(--success);transition:width .4s}
+.bar-legend{display:flex;gap:16px;font-size:12px;color:var(--text2)}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px}
+
+.etf-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:16px}
+.etf-table th{text-align:left;color:var(--text3);border-bottom:1px solid var(--border);padding:8px 4px;font-weight:500}
+.etf-table td{padding:10px 4px;border-bottom:1px solid rgba(71,85,105,.4)}
+.badge-risk{background:rgba(239,68,68,.15);color:#f87171;padding:2px 6px;border-radius:4px;font-size:11px}
+.badge-safe{background:rgba(16,185,129,.15);color:#34d399;padding:2px 6px;border-radius:4px;font-size:11px}
+.weight-pill{background:rgba(59,130,246,.15);color:var(--primary-l);padding:2px 8px;border-radius:4px;font-weight:600}
+
+.compliance-box{border-radius:8px;padding:16px;margin-top:16px;font-size:13px}
+.compliance-box.pass{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3)}
+.compliance-box.fail{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3)}
+
+.tax-box{background:var(--surface2);border-radius:8px;padding:20px;margin-top:20px}
+.tax-box h4{font-size:14px;color:var(--primary-l);margin-bottom:12px}
+.tax-row{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid rgba(71,85,105,.3)}
+.tax-row:last-child{border:none;font-weight:700;color:var(--success)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-d)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text2)}.btn-outline:hover{border-color:var(--primary-l);color:var(--text)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-row{display:flex;justify-content:space-between;margin-top:28px;gap:12px}
+
+/* SPINNER */
+.spinner{display:none;text-align:center;padding:40px}
+.spinner.active{display:block}
+.spin{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ERROR */
+.error-box{background:rgba(239,68,68,.1);border:1px solid var(--danger);border-radius:8px;padding:14px;font-size:13px;color:#f87171;margin-top:12px;display:none}
+
+/* FOOTER */
+footer{text-align:center;font-size:11px;color:var(--text3);padding:24px;border-top:1px solid var(--border);margin-top:48px}
+
+/* UTIL */
+.hidden{display:none!important}
+.mt-4{margin-top:16px}.mt-2{margin-top:8px}
+.text-success{color:var(--success)}.text-warn{color:var(--warn)}
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">WWAI<span> 연금</span></span>
+  <span class="badge">Beta</span>
+</nav>
+
+<!-- STEP INDICATOR -->
+<div class="steps" id="steps">
+  <div class="step active" id="s1"><div class="num">1</div><span>연금 정보</span></div>
+  <div class="step-line" id="l12"></div>
+  <div class="step" id="s2"><div class="num">2</div><span>투자 성향</span></div>
+  <div class="step-line" id="l23"></div>
+  <div class="step" id="s3"><div class="num">3</div><span>ETF 배분</span></div>
+  <div class="step-line" id="l34"></div>
+  <div class="step" id="s4"><div class="num">4</div><span>세제 혜택</span></div>
+</div>
+
+<main>
+
+<!-- ═══ STEP 1: PENSION CONTEXT ═══ -->
+<div id="page1" class="card">
+  <div class="card-title">내 연금 정보 입력</div>
+  <div class="card-sub">IRP/DC 계좌 정보와 은퇴 계획을 알려주세요. FSC 규정에 맞는 포트폴리오를 설계합니다.</div>
+
+  <div class="field">
+    <label class="required">예상 은퇴 연도</label>
+    <input type="number" id="retirement_year" min="2025" max="2070" value="2045" placeholder="예: 2045"/>
+    <div style="font-size:12px;color:var(--text3);margin-top:4px">투자 잔여 기간: <b id="horizon_label">19년</b></div>
+  </div>
+
+  <div class="field">
+    <label>현재 IRP/DC 적립금</label>
+    <div class="unit">
+      <input type="number" id="irp_balance" min="0" value="0" placeholder="0"/>
+      <span>만원</span>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="required">월 납입 가능 금액</label>
+    <div class="unit">
+      <input type="number" id="monthly_contrib" min="0" max="150" value="50" placeholder="50"/>
+      <span>만원 (최대 150만원/월)</span>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="required">현재 주요 운용 방식</label>
+    <div class="radio-group">
+      <label class="radio-option" onclick="selectRadio('allocation_type','conservative',this)">
+        <input type="radio" name="allocation_type" value="conservative"/>
+        <div class="radio-dot"></div>
+        <div><div class="radio-label">원리금보장 중심</div><div class="radio-desc">예금, 정기예금 위주로 운용 중</div></div>
+      </label>
+      <label class="radio-option selected" onclick="selectRadio('allocation_type','mixed',this)">
+        <input type="radio" name="allocation_type" value="mixed" checked/>
+        <div class="radio-dot"></div>
+        <div><div class="radio-label">혼합 운용</div><div class="radio-desc">일부는 ETF/펀드, 나머지는 예금</div></div>
+      </label>
+      <label class="radio-option" onclick="selectRadio('allocation_type','aggressive',this)">
+        <input type="radio" name="allocation_type" value="aggressive"/>
+        <div class="radio-dot"></div>
+        <div><div class="radio-label">실적배당 중심</div><div class="radio-desc">ETF/펀드 위주로 적극 운용 중</div></div>
+      </label>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>실물이전(갈아타기) 의향</label>
+    <div class="radio-group">
+      <label class="radio-option selected" onclick="selectRadio('switch_intent','yes',this)">
+        <input type="radio" name="switch_intent" value="yes" checked/>
+        <div class="radio-dot"></div>
+        <div><div class="radio-label">있음</div><div class="radio-desc">더 좋은 수익률을 위해 금융사 변경 의향 있음</div></div>
+      </label>
+      <label class="radio-option" onclick="selectRadio('switch_intent','no',this)">
+        <input type="radio" name="switch_intent" value="no"/>
+        <div class="radio-dot"></div>
+        <div><div class="radio-label">없음</div><div class="radio-desc">현재 금융사 유지 예정</div></div>
+      </label>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <span></span>
+    <button class="btn btn-primary" onclick="goStep2()">다음 → 투자 성향 진단</button>
+  </div>
+</div>
+
+<!-- ═══ STEP 2: CRRA ELICITATION ═══ -->
+<div id="page2" class="card hidden">
+  <div class="card-title">투자 성향 진단</div>
+  <div class="card-sub">연령대 선택 → 3가지 선택 → SNS 민감도 순서로 답해주세요.<br>WWAI 독점 행동재무 알고리즘(Chung 2025)으로 γ*(위험회피도)를 산출합니다.</div>
+
+  <!-- COHORT -->
+  <div class="field">
+    <label class="required">연령대</label>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px" id="cohort_group">
+      <button class="crra-btn" data-cohort="20s" onclick="pickCohort(this)">20대<br><small style="color:var(--text3)">γ기본 1.6</small></button>
+      <button class="crra-btn" data-cohort="30s" onclick="pickCohort(this)">30대<br><small style="color:var(--text3)">γ기본 2.5</small></button>
+      <button class="crra-btn selected" data-cohort="40s" onclick="pickCohort(this)">40대<br><small style="color:var(--text3)">γ기본 2.5</small></button>
+      <button class="crra-btn" data-cohort="50s" onclick="pickCohort(this)">50대<br><small style="color:var(--text3)">γ기본 4.5</small></button>
+      <button class="crra-btn" data-cohort="60s" onclick="pickCohort(this)">60대<br><small style="color:var(--text3)">γ기본 7.0</small></button>
+    </div>
+  </div>
+
+  <!-- CRRA Q1 -->
+  <div class="crra-q">
+    <p><b>Q1.</b> 100만원을 투자할 때, 어떤 방식을 선택하시겠습니까?</p>
+    <div class="crra-choices">
+      <button class="crra-btn" data-q="q6" data-v="A" onclick="pickCrra(this)">A) 확실한 50만원 수익</button>
+      <button class="crra-btn" data-q="q6" data-v="B" onclick="pickCrra(this)">B) 50% 확률로 120만원 또는 0원</button>
+    </div>
+  </div>
+
+  <!-- CRRA Q2 -->
+  <div class="crra-q">
+    <p><b>Q2.</b> 포트폴리오가 10% 하락했습니다. 어떻게 하시겠습니까?</p>
+    <div class="crra-choices">
+      <button class="crra-btn" data-q="q7" data-v="A" onclick="pickCrra(this)">A) 손실을 줄이기 위해 일부 매도</button>
+      <button class="crra-btn" data-q="q7" data-v="B" onclick="pickCrra(this)">B) 하락을 기회로 보고 추가 매수</button>
+    </div>
+  </div>
+
+  <!-- CRRA Q3 -->
+  <div class="crra-q">
+    <p><b>Q3.</b> 장기 투자입니다. 어느 쪽이 더 편안합니까?</p>
+    <div class="crra-choices">
+      <button class="crra-btn" data-q="q8" data-v="A" onclick="pickCrra(this)">A) 연 3% 확실한 수익</button>
+      <button class="crra-btn" data-q="q8" data-v="B" onclick="pickCrra(this)">B) 연 –5%~+25% 범위의 변동 수익</button>
+    </div>
+  </div>
+
+  <!-- γ* PREVIEW (shown after 3 questions) -->
+  <div id="gamma_preview" style="display:none;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:14px;margin:12px 0;font-size:13px">
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">
+      <div><span style="color:var(--text3)">γ̂ (관찰값)</span><br><b id="ghat_val" style="font-size:18px;color:var(--primary-l)">—</b></div>
+      <div id="sns_arrow" style="font-size:20px;color:var(--text3)">→</div>
+      <div><span style="color:var(--text3)">γ* (SNS 보정)</span><br><b id="gstar_val" style="font-size:18px;color:var(--success)">—</b></div>
+      <div style="margin-left:auto"><span style="color:var(--text3)">위험자산 비중 힌트</span><br><b id="eq_hint" style="font-size:18px;color:var(--warn)">—</b></div>
+    </div>
+    <div id="crra_label_txt" style="margin-top:8px;color:var(--text2)"></div>
+  </div>
+
+  <!-- SNS LEVEL -->
+  <div class="field mt-4">
+    <label>최근 SNS·뉴스에서 접한 시장 분위기</label>
+    <div class="radio-group" id="sns_group">
+      <label class="radio-option" onclick="pickSns('strong_bearish',this)">
+        <input type="radio" name="sns_level" value="strong_bearish"/>
+        <div class="radio-dot"></div>
+        <div><div class="radio-label">강한 하락론 (폭락 임박 등)</div><div class="radio-desc">γ 상방 조정 (공포 증폭)</div></div>
+      </label>
+      <label class="radio-option" onclick="pickSns('mild_bearish',this)">
+        <input type="radio" name="sns_level" value="mild_bearish"/>
+        <div class="radio-dot"></div>
+        <div><div class="radio-label">약한 하락론 (조정 가능성)</div></div>
+      </label>
+      <label class="radio-option selected" onclick="pickSns('neutral',this)">
+        <input type="radio" name="sns_level" value="neutral" checked/>
+        <div class="radio-dot"></div>
+        <div><div class="radio-label">중립 (별로 보지 않음)</div><div class="radio-desc">SNS 보정 없음</div></div>
+      </label>
+      <label class="radio-option" onclick="pickSns('mild_bullish',this)">
+        <input type="radio" name="sns_level" value="mild_bullish"/>
+        <div class="radio-dot"></div>
+        <div><div class="radio-label">약한 상승론 (낙관적)</div></div>
+      </label>
+      <label class="radio-option" onclick="pickSns('strong_bullish',this)">
+        <input type="radio" name="sns_level" value="strong_bullish"/>
+        <div class="radio-dot"></div>
+        <div><div class="radio-label">강한 상승론 (FOMO 분위기)</div><div class="radio-desc">공격형 → γ 하방 조정 위험</div></div>
+      </label>
+    </div>
+  </div>
+
+  <div class="error-box" id="crra_error">3가지 질문에 모두 답해주세요.</div>
+
+  <div class="btn-row">
+    <button class="btn btn-outline" onclick="goStep(1)">← 이전</button>
+    <button class="btn btn-primary" onclick="goStep3()">포트폴리오 생성 →</button>
+  </div>
+</div>
+
+<!-- ═══ STEP 3: PORTFOLIO RESULT ═══ -->
+<div id="page3" class="card hidden">
+  <div class="spinner active" id="spinner3">
+    <div class="spin"></div>
+    <p style="color:var(--text2);font-size:14px">IRP 적격 포트폴리오 생성 중...</p>
+  </div>
+
+  <div id="result3" class="hidden">
+    <div class="card-title">내 IRP 맞춤 ETF 포트폴리오</div>
+    <div class="card-sub" id="profile_summary"></div>
+
+    <div class="result-grid" id="metric_grid"></div>
+
+    <div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text2);margin-bottom:6px">
+        <span>자산 배분</span>
+        <span id="alloc_label"></span>
+      </div>
+      <div class="allocation-bar">
+        <div class="bar-equity" id="bar_equity"></div>
+        <div class="bar-safe"   id="bar_safe"></div>
+      </div>
+      <div class="bar-legend">
+        <span><span class="dot" style="background:var(--primary)"></span>위험자산 (주식형)</span>
+        <span><span class="dot" style="background:var(--success)"></span>안전자산 (채권/MMF)</span>
+      </div>
+    </div>
+
+    <table class="etf-table" id="etf_table">
+      <thead><tr>
+        <th>티커</th><th>ETF명</th><th>자산군</th><th>구분</th><th>WWAI 신호</th><th style="text-align:right">비중</th>
+      </tr></thead>
+      <tbody id="etf_body"></tbody>
+    </table>
+
+    <div class="compliance-box" id="compliance_box">
+      <b id="compliance_title"></b>
+      <div id="compliance_detail" style="margin-top:6px;color:var(--text2)"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="goStep(2)">← 이전</button>
+      <button class="btn btn-primary" onclick="goStep4()">세제 혜택 확인 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ STEP 4: TAX BENEFIT ═══ -->
+<div id="page4" class="card hidden">
+  <div class="card-title">IRP 세제 혜택 분석</div>
+  <div class="card-sub">연간 납입금액에 따른 세액공제 효과와 로보어드바이저 일임 한도를 확인하세요.</div>
+
+  <div class="tax-box" id="tax_box"></div>
+
+  <div class="tax-box mt-4" style="border:1px solid var(--border)">
+    <h4>로보어드바이저 일임 한도</h4>
+    <div class="tax-row"><span>IRP 로보어드바이저 연간 한도</span><span>900만원</span></div>
+    <div class="tax-row"><span>한도 이월 가능 여부</span><span class="text-success">가능</span></div>
+    <div class="tax-row"><span>코스콤 테스트베드 검증</span><span class="text-success">완료</span></div>
+    <div class="tax-row" id="switch_row" style="display:none"></div>
+  </div>
+
+  <div style="margin-top:24px;font-size:12px;color:var(--text3);line-height:1.7;border-top:1px solid var(--border);padding-top:16px">
+    ※ 본 투자성향 진단 방법론은 WWAI의 독점적 행동재무 알고리즘을 기반으로 합니다.<br>
+    © 2025 WWAI. All rights reserved. 무단 복제 및 배포를 금합니다.<br>
+    이 서비스는 일반적인 정보 제공 목적이며, 개인별 투자 조언이 아닙니다. 원금 손실 위험이 있습니다.
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-outline" onclick="goStep(3)">← 이전</button>
+    <button class="btn btn-primary" onclick="restart()">다시 진단하기</button>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  WWAI Pension Robo-Advisor · © 2025 WWAI · pension.wwai.app<br>
+  본 서비스는 혁신금융서비스 로보어드바이저 알고리즘을 활용합니다
+</footer>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+const state = {
+  step: 1,
+  cohort: '40s',
+  crra: {},          // q6, q7, q8 answers (A or B)
+  sns_level: 'neutral',
+  q17: 'selective_buy',
+  profile: null,
+  portfolio: null,
+};
+
+// CRRA constants (mirrors backend)
+const CRRA_BRACKETS = [
+  [1.6, 'Moderate Risk-Taker'],
+  [2.5, 'Mildly Risk-Averse'],
+  [4.5, 'Quite Risk-Averse'],
+  [7.0, 'Very Risk-Averse'],
+];
+const SNS_MAP = {
+  strong_bearish: {phi:0.8, valence:'bearish'},
+  mild_bearish:   {phi:0.4, valence:'bearish'},
+  neutral:        {phi:0.0, valence:'neutral'},
+  mild_bullish:   {phi:0.4, valence:'bullish'},
+  strong_bullish: {phi:0.8, valence:'bullish'},
+};
+
+function localCrraScore() {
+  return ['q6','q7','q8'].filter(q => state.crra[q] === 'A').length;
+}
+function localGamma() {
+  const score = localCrraScore();
+  const [ghat] = CRRA_BRACKETS[score];
+  const {phi, valence} = SNS_MAP[state.sns_level] || SNS_MAP.neutral;
+  if (phi === 0) return {ghat, gstar: ghat};
+  const delta = 0.25 * phi;
+  const conservative = ghat >= 3.5;
+  let gstar;
+  if (conservative || valence === 'bearish') gstar = +(ghat + delta).toFixed(3);
+  else gstar = +Math.max(0.5, ghat - delta).toFixed(3);
+  return {ghat, gstar};
+}
+
+// ─── STEP NAVIGATION ────────────────────────────────────────────────────────
+function goStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById('page'+i).classList.toggle('hidden', i !== n);
+    const s = document.getElementById('s'+i);
+    s.classList.remove('active','done');
+    if (i < n) s.classList.add('done');
+    else if (i === n) s.classList.add('active');
+    if (i < 4) {
+      document.getElementById('l'+i+(i+1)).classList.toggle('done', i < n);
+    }
+  }
+  state.step = n;
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function goStep2() {
+  const ry = parseInt(document.getElementById('retirement_year').value);
+  if (!ry || ry < 2026 || ry > 2070) { alert('올바른 은퇴 연도를 입력해주세요.'); return; }
+  goStep(2);
+}
+
+async function goStep3() {
+  if (Object.keys(state.crra).length < 3) {
+    document.getElementById('crra_error').style.display = 'block';
+    return;
+  }
+  document.getElementById('crra_error').style.display = 'none';
+  goStep(3);
+  document.getElementById('spinner3').style.display = 'block';
+  document.getElementById('result3').classList.add('hidden');
+
+  const payload = buildPayload();
+  try {
+    const pr = await fetch('/api/pension/profile', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!pr.ok) throw new Error('Profile API error');
+    state.profile = await pr.json();
+
+    const por = await fetch('/api/pension/portfolio', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({profile: state.profile})
+    });
+    if (!por.ok) throw new Error('Portfolio API error');
+    state.portfolio = await por.json();
+
+    renderPortfolio();
+  } catch(e) {
+    console.error(e);
+    document.getElementById('spinner3').innerHTML =
+      '<div style="color:#f87171;padding:20px">포트폴리오 생성 중 오류가 발생했습니다.<br><small>'+e.message+'</small></div>';
+  }
+}
+
+function goStep4() {
+  goStep(4);
+  renderTax();
+}
+
+function restart() { location.reload(); }
+
+// ─── PAYLOAD BUILDER ─────────────────────────────────────────────────────────
+function buildPayload() {
+  const ry  = parseInt(document.getElementById('retirement_year').value);
+  const bal = parseFloat(document.getElementById('irp_balance').value) || 0;
+  const mc  = parseFloat(document.getElementById('monthly_contrib').value) || 50;
+  const at  = document.querySelector('input[name="allocation_type"]:checked')?.value || 'mixed';
+  const sw  = document.querySelector('input[name="switch_intent"]:checked')?.value === 'yes';
+
+  return {
+    client_id: 'anon_' + Date.now(),
+    pension_ctx: {
+      retirement_year: ry,
+      irp_balance_만원: bal,
+      monthly_contrib_만원: mc,
+      current_allocation_type: at,
+      switch_intent: sw,
+    },
+    crra_input: {
+      cohort:    state.cohort,
+      q6:        state.crra.q6 || 'B',
+      q7:        state.crra.q7 || 'B',
+      q8:        state.crra.q8 || 'B',
+      sns_level: state.sns_level,
+    },
+  };
+}
+
+function horizonToQ1(ry) {
+  const h = ry - new Date().getFullYear();
+  if (h >= 7) return '7_years_plus';
+  if (h >= 3) return '3_7y';
+  if (h >= 1) return '1_3y';
+  return 'within_1y';
+}
+
+// ─── RENDER PORTFOLIO ────────────────────────────────────────────────────────
+function renderPortfolio() {
+  document.getElementById('spinner3').style.display = 'none';
+  document.getElementById('result3').classList.remove('hidden');
+
+  const p = state.portfolio;
+  const pr = state.profile;
+  const dna = pr.dna || {};
+  const horizon = pr.horizon_yr || 20;
+
+  // Summary
+  const archMap = {
+    moderate_risk_taker:'적극 투자형', controlled_allocator:'균형 배분형',
+    quite_risk_averse:'안전 추구형', very_risk_averse:'초보수형',
+    narrative_chaser:'스토리 추종형', fragile_de_risker:'방어형',
+    high_conviction_dip_buyer:'확신형 저점매수', overconfident_concentrator:'집중투자형',
+  };
+  const crra = dna.crra_detail || {};
+  const archLabel = archMap[dna.archetype] || dna.archetype;
+  const cohortLabel = {
+    '20s':'20대','30s':'30대','40s':'40대','50s':'50대','60s':'60대'
+  }[crra.cohort || state.cohort] || '';
+  const snsBadge = crra.correction_bps > 0
+    ? ` · SNS 보정 ${crra.correction_bps}bps` : '';
+  document.getElementById('profile_summary').textContent =
+    `${cohortLabel} · ${archLabel} · γ* ${(dna.gamma_hat||2.5).toFixed(1)}${snsBadge} · 잔여 ${horizon}년 · 레짐: ${p.regime||'Bull_Quiet'}`;
+
+  // Metrics
+  const metrics = [
+    {label:'위험자산 비중', value: p.allocation.equity_pct+'%', sub:'FSC 한도 70%'},
+    {label:'안전자산 비중', value: p.allocation.safe_pct+'%', sub:'FSC 최소 30%'},
+    {label:'ETF 종목 수',  value: (p.etfs||[]).length+'개', sub:'분산 투자'},
+    {label:'리밸런싱',     value: '분기 1회', sub:'또는 5%p 이탈 시'},
+  ];
+  document.getElementById('metric_grid').innerHTML = metrics.map(m=>
+    `<div class="metric"><div class="metric-label">${m.label}</div><div class="metric-value">${m.value}</div><div class="metric-sub">${m.sub}</div></div>`
+  ).join('');
+
+  // Allocation bar
+  const eq = p.allocation.equity_pct;
+  const sf = p.allocation.safe_pct;
+  document.getElementById('bar_equity').style.width = eq+'%';
+  document.getElementById('bar_safe').style.width   = sf+'%';
+  document.getElementById('alloc_label').textContent = `위험 ${eq}% / 안전 ${sf}%`;
+
+  // ETF table
+  const cls_ko = {
+    domestic_equity:'국내주식', overseas_equity:'해외주식',
+    domestic_theme:'국내테마', bond_money_market:'채권/MMF',
+    mixed_bond:'혼합채권', commodity:'원자재'
+  };
+  document.getElementById('etf_body').innerHTML = (p.etfs||[]).map(e=>`
+    <tr>
+      <td style="font-family:monospace;color:var(--text3)">${e.ticker}</td>
+      <td>${e.name}</td>
+      <td>${cls_ko[e.asset_class]||e.asset_class}</td>
+      <td>${e.risk_type==='위험자산'
+        ? '<span class="badge-risk">위험</span>'
+        : '<span class="badge-safe">안전</span>'}</td>
+      <td style="font-size:11px;color:${signalColor(e.ucs_score)}">${e.signal||'—'}</td>
+      <td style="text-align:right"><span class="weight-pill">${(e.weight*100).toFixed(1)}%</span></td>
+    </tr>`).join('');
+
+function signalColor(score) {
+  if (!score) return 'var(--text3)';
+  if (score >= 150) return '#34d399';
+  if (score >= 100) return '#60a5fa';
+  if (score >= 50)  return '#f59e0b';
+  return 'var(--text3)';
+}
+
+  // Compliance
+  const c = p.compliance || {};
+  const box = document.getElementById('compliance_box');
+  box.className = 'compliance-box ' + (c.fsc_pass ? 'pass' : 'fail');
+  document.getElementById('compliance_title').textContent =
+    c.fsc_pass ? '✓ FSC 퇴직연금 감독규정 준수' : '⚠ FSC 규정 위반 감지';
+  document.getElementById('compliance_detail').innerHTML =
+    `위험자산 ${c.equity_pct}% · 안전자산 ${c.safe_pct}% · ETF ${c.etf_count}종목`
+    + (c.violations?.length ? '<br>위반: ' + c.violations.join(', ') : '');
+}
+
+// ─── RENDER TAX ──────────────────────────────────────────────────────────────
+function renderTax() {
+  const tb = state.profile?.tax_benefit || {};
+  const p  = state.portfolio || {};
+  const mc = state.profile?.pension_context?.monthly_contrib_만원 || 50;
+  const sw = state.profile?.pension_context?.switch_intent;
+
+  const fmt = v => Number(v||0).toLocaleString('ko-KR')+'원';
+  document.getElementById('tax_box').innerHTML = `
+    <h4>세액공제 시뮬레이션</h4>
+    <div class="tax-row"><span>연간 납입 예정액</span><span>${fmt(tb.annual_contribution_원)}</span></div>
+    <div class="tax-row"><span>세액공제 대상 한도</span><span>${fmt(tb.tax_deductible_원)}</span></div>
+    <div class="tax-row"><span>적용 공제율</span><span>${tb.effective_rate_pct||16.5}%</span></div>
+    <div class="tax-row"><span>예상 연간 세금 환급</span><span class="text-success">${fmt(tb.estimated_tax_return_원)}</span></div>`;
+
+  if (sw) {
+    const sr = document.getElementById('switch_row');
+    sr.style.display = 'flex';
+    sr.innerHTML = '<span>갈아타기(실물이전) 신청</span><span class="text-success">가능 (매도 없이 이전)</span>';
+  }
+}
+
+// ─── UI HELPERS ──────────────────────────────────────────────────────────────
+function pickCohort(btn) {
+  state.cohort = btn.dataset.cohort;
+  document.querySelectorAll('#cohort_group .crra-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  updateGammaPreview();
+}
+
+function pickCrra(btn) {
+  const q = btn.dataset.q;
+  state.crra[q] = btn.dataset.v;
+  btn.closest('.crra-choices').querySelectorAll('.crra-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  updateGammaPreview();
+}
+
+function pickSns(val, el) {
+  state.sns_level = val;
+  document.querySelectorAll('#sns_group .radio-option').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  el.querySelector('input').checked = true;
+  updateGammaPreview();
+}
+
+function updateGammaPreview() {
+  const answered = Object.keys(state.crra).length;
+  if (answered < 3) return;
+  const {ghat, gstar} = localGamma();
+  const eq = Math.round(Math.min(1/gstar, 0.70) * 100);
+  document.getElementById('gamma_preview').style.display = 'block';
+  document.getElementById('ghat_val').textContent  = ghat.toFixed(1);
+  document.getElementById('gstar_val').textContent = gstar.toFixed(1);
+  document.getElementById('eq_hint').textContent   = eq + '%';
+  const score = localCrraScore();
+  document.getElementById('crra_label_txt').textContent =
+    '성향: ' + CRRA_BRACKETS[score][1] +
+    (gstar !== ghat ? ` · SNS 보정 ${gstar > ghat ? '+' : ''}${((gstar-ghat)*100).toFixed(0)}bps` : ' · SNS 보정 없음');
+}
+
+function selectRadio(name, val, el) {
+  document.querySelectorAll('.radio-option').forEach(o=>{
+    if(o.closest('div')===el.closest('div')||o.querySelector('input')?.name===name)
+      o.classList.remove('selected');
+  });
+  el.classList.add('selected');
+  el.querySelector('input').checked = true;
+  if (name === 'q17') state.q17 = val;
+}
+
+// Horizon label update
+document.getElementById('retirement_year').addEventListener('input', function() {
+  const h = Math.max(1, parseInt(this.value||2045) - new Date().getFullYear());
+  document.getElementById('horizon_label').textContent = h + '년';
+});
+// Init
+document.getElementById('horizon_label').textContent =
+  Math.max(1, parseInt(document.getElementById('retirement_year').value) - new Date().getFullYear()) + '년';
+</script>
+</body>
+</html>
